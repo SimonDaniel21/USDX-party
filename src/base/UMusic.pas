@@ -147,7 +147,6 @@ type
     CurrentLine: integer;  // for drawing of current line
     High:        integer;  // = High(Line)!
     Number:      integer;
-    Resolution:  integer;
     NotesGAP:    integer;
     ScoreValue:  integer;
     Lines:       array of TLine;
@@ -469,6 +468,7 @@ type
       procedure Rewind;
       function  Finished: boolean;
       function  Length: real;
+      function  GetFileName: string;
 
       function Open(const Filename: IPath; const FilenameKaraoke: IPath): boolean; // true if succeed
       procedure Close;
@@ -628,11 +628,8 @@ type
   end;
 
 var
-  // TODO: JB --- THESE SHOULD NOT BE GLOBAL
-  Tracks: array of TLines;
   LyricsState: TLyricsState;
   SoundLib: TSoundLibrary;
-
 
 procedure InitializeSound;
 procedure InitializeVideo;
@@ -1199,9 +1196,7 @@ end;
 function TAudioPlaybackStream.Synchronize(BufferSize: integer; FormatInfo: TAudioFormatInfo): integer;
 var
   TimeDiff: double;
-  FrameDiff: double;
   FrameSkip: integer;
-  ReqFrames: integer;
   MasterClock: real;
   CurPosition: real;
 const
@@ -1430,12 +1425,12 @@ var
 begin
   found := false;
 
-  for LineIndex := 0 to High(Tracks[0].Lines) do
+  for LineIndex := 0 to High(CurrentSong.Tracks[0].Lines) do
   begin
-    for NoteIndex := 0 to High(Tracks[0].Lines[LineIndex].Notes) do
+    for NoteIndex := 0 to High(CurrentSong.Tracks[0].Lines[LineIndex].Notes) do
     begin
-      if (beat >= Tracks[0].Lines[LineIndex].Notes[NoteIndex].StartBeat) and
-         (beat <= Tracks[0].Lines[LineIndex].Notes[NoteIndex].StartBeat + Tracks[0].Lines[LineIndex].Notes[NoteIndex].Duration) then
+      if (beat >= CurrentSong.Tracks[0].Lines[LineIndex].Notes[NoteIndex].StartBeat) and
+         (beat <= CurrentSong.Tracks[0].Lines[LineIndex].Notes[NoteIndex].StartBeat + CurrentSong.Tracks[0].Lines[LineIndex].Notes[NoteIndex].Duration) then
       begin
         Result.track := 0;
         Result.line := LineIndex;
@@ -1451,12 +1446,12 @@ begin
 
   if CurrentSong.isDuet and (PlayersPlay <> 1) then
   begin
-    for LineIndex := 0 to High(Tracks[1].Lines) do
+    for LineIndex := 0 to High(CurrentSong.Tracks[1].Lines) do
     begin
-      for NoteIndex := 0 to High(Tracks[1].Lines[LineIndex].Notes) do
+      for NoteIndex := 0 to High(CurrentSong.Tracks[1].Lines[LineIndex].Notes) do
       begin
-        if (beat >= Tracks[1].Lines[LineIndex].Notes[NoteIndex].StartBeat) and
-          (beat <= Tracks[1].Lines[LineIndex].Notes[NoteIndex].StartBeat + Tracks[1].Lines[LineIndex].Notes[NoteIndex].Duration) then
+        if (beat >= CurrentSong.Tracks[1].Lines[LineIndex].Notes[NoteIndex].StartBeat) and
+          (beat <= CurrentSong.Tracks[1].Lines[LineIndex].Notes[NoteIndex].StartBeat + CurrentSong.Tracks[1].Lines[LineIndex].Notes[NoteIndex].Duration) then
         begin
           Result.track := 1;
           Result.line := LineIndex;
@@ -1473,11 +1468,11 @@ begin
 
   min := high(integer);
   //second try (approximating)
-  for LineIndex := 0 to High(Tracks[0].Lines) do
+  for LineIndex := 0 to High(CurrentSong.Tracks[0].Lines) do
   begin
-    for NoteIndex := 0 to High(Tracks[0].Lines[LineIndex].Notes) do
+    for NoteIndex := 0 to High(CurrentSong.Tracks[0].Lines[LineIndex].Notes) do
     begin
-      diff := abs(Tracks[0].Lines[LineIndex].Notes[NoteIndex].StartBeat - beat);
+      diff := abs(CurrentSong.Tracks[0].Lines[LineIndex].Notes[NoteIndex].StartBeat - beat);
       if diff < min then
       begin
         Result.track := 0;
@@ -1490,11 +1485,11 @@ begin
 
   if CurrentSong.isDuet and (PlayersPlay <> 1) then
   begin
-    for LineIndex := 0 to High(Tracks[1].Lines) do
+    for LineIndex := 0 to High(CurrentSong.Tracks[1].Lines) do
     begin
-      for NoteIndex := 0 to High(Tracks[1].Lines[LineIndex].Notes) do
+      for NoteIndex := 0 to High(CurrentSong.Tracks[1].Lines[LineIndex].Notes) do
       begin
-        diff := abs(Tracks[1].Lines[LineIndex].Notes[NoteIndex].StartBeat - beat);
+        diff := abs(CurrentSong.Tracks[1].Lines[LineIndex].Notes[NoteIndex].StartBeat - beat);
         if diff < min then
         begin
           Result.track := 1;

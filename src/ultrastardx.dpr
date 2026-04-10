@@ -134,7 +134,7 @@ uses
   {$ENDIF}
 
   {$IFDEF DARWIN}
-  PseudoThread  in 'macosx\PseudoThread.pas',
+  PseudoThread  in 'macos\PseudoThread.pas',
   {$ENDIF}
 
   //------------------------------
@@ -162,6 +162,7 @@ uses
   UMenuButton            in 'menu\UMenuButton.pas',
   UMenuInteract          in 'menu\UMenuInteract.pas',
   UMenuSelectSlide       in 'menu\UMenuSelectSlide.pas',
+  UMenuWidget            in 'menu\UMenuWidget.pas',
   UMenuEqualizer         in 'menu\UMenuEqualizer.pas',
   UDrawTexture           in 'menu\UDrawTexture.pas',
   UMenuButtonCollection  in 'menu\UMenuButtonCollection.pas',
@@ -234,7 +235,7 @@ uses
 {$IF Defined(MSWINDOWS)}
   UPlatformWindows  in 'base\UPlatformWindows.pas',
 {$ELSEIF Defined(DARWIN)}
-  UPlatformMacOSX   in 'base\UPlatformMacOSX.pas',
+  UPlatformMacOS   in 'base\UPlatformMacOS.pas',
 {$ELSEIF Defined(UNIX)}
   UPlatformLinux    in 'base\UPlatformLinux.pas',
 {$IFEND}
@@ -295,7 +296,6 @@ uses
   UScreenLoading          in 'screens\UScreenLoading.pas',
   UScreenMain             in 'screens\UScreenMain.pas',
   UScreenName             in 'screens\UScreenName.pas',
-  UScreenLevel            in 'screens\UScreenLevel.pas',
   UScreenSong             in 'screens\UScreenSong.pas',
   UScreenSingController   in 'screens\controllers\UScreenSingController.pas',
   UScreenSingView         in 'screens\views\UScreenSingView.pas',
@@ -322,7 +322,6 @@ uses
   UScreenSongJumpto       in 'screens\UScreenSongJumpto.pas',
   UScreenStatMain         in 'screens\UScreenStatMain.pas',
   UScreenStatDetail       in 'screens\UScreenStatDetail.pas',
-  UScreenCredits          in 'screens\UScreenCredits.pas',
   UScreenPopup            in 'screens\UScreenPopup.pas',
 
   //Includes - Screens PartyMode

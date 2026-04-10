@@ -193,6 +193,7 @@ type
 
 
     constructor Create;
+    destructor Destroy; override;
 
     procedure DrawMedleyCountdown();
     function Draw: boolean;
@@ -239,8 +240,6 @@ const
 //ToDo basisbit: check this again
 // Dirty HacK
 procedure TScreenSingView.SwapToScreen(Screen: integer);
-var
-  P, I: integer;
   procedure setVisible(elements: array of integer; visible: boolean);
   var
     J: integer;
@@ -549,7 +548,7 @@ begin
     end
     else
     begin
-      ScreenSing.PlayerNames[I] := Ini.Name[I-1];
+      ScreenSing.PlayerNames[I] := Player[I-1].Name;
     end;
     ScreenSing.PlayerDuetNames[I] := ScreenSing.PlayerNames[I];
   end;
@@ -714,6 +713,41 @@ begin
   assignAvatarStatic(Theme.Sing.Duet3PP3, StaticDuetP3RAvatar[1]     , AvatarPlayerTextures[6]);
 end;
 
+destructor TScreenSingView.Destroy;
+var
+  I: integer;
+begin
+  for I := 1 to UIni.IMaxPlayerCount do
+  begin
+    FreeTexture(Tex_Left[I]);
+    FreeTexture(Tex_Mid[I]);
+    FreeTexture(Tex_Right[I]);
+    FreeTexture(Tex_plain_Left[I]);
+    FreeTexture(Tex_plain_Mid[I]);
+    FreeTexture(Tex_plain_Right[I]);
+    FreeTexture(Tex_BG_Left[I]);
+    FreeTexture(Tex_BG_Mid[I]);
+    FreeTexture(Tex_BG_Right[I]);
+    FreeTexture(Tex_Left_Rap[I]);
+    FreeTexture(Tex_Mid_Rap[I]);
+    FreeTexture(Tex_Right_Rap[I]);
+    FreeTexture(Tex_plain_Left_Rap[I]);
+    FreeTexture(Tex_plain_Mid_Rap[I]);
+    FreeTexture(Tex_plain_Right_Rap[I]);
+    FreeTexture(Tex_BG_Left_Rap[I]);
+    FreeTexture(Tex_BG_Mid_Rap[I]);
+    FreeTexture(Tex_BG_Right_Rap[I]);
+    FreeTexture(Tex_ScoreBG[I - 1]);
+  end;
+  FreeTexture(Tex_Left_Inv);
+  FreeTexture(Tex_Mid_Inv);
+  FreeTexture(Tex_Right_Inv);
+  FreeTexture(Tex_Left_Rap_Inv);
+  FreeTexture(Tex_Mid_Rap_Inv);
+  FreeTexture(Tex_Right_Rap_Inv);
+  inherited;
+end;
+
 function TScreenSingView.Draw: boolean;
 var
   DisplayTime:            real;
@@ -724,9 +758,6 @@ var
   CurLyricsTime:          real;
   VideoFrameTime:         Extended;
   Line:                   TLyricLine;
-  LastWord:               TLyricWord;
-  LineDuet:               TLyricLine;
-  LastWordDuet:           TLyricWord;
   medley_end:             boolean;
   medley_start_applause:  boolean;
   LastLineSungToEnd:      boolean;
@@ -880,6 +911,7 @@ begin
   ScreenSing.Text[TextTimeText].Text := Format('%s%.2d:%.2d', [DisplayPrefix, DisplayMin, DisplaySec]);
   ScreenSing.Text[TextTimeText].Visible := ScreenSing.Settings.TimeBarVisible;
 
+  LastLineSungToEnd := false;
   //the song was sung to the end?
   if not (ScreenSing.SungToEnd) and not(CurrentSong.isDuet) and not(ScreenSong.RapToFreestyle) then
   begin
@@ -1032,7 +1064,6 @@ var
   timeDiff:       real;
   t:              real;
   CountDownText:  UTF8String;
-  Position:       real;
 begin
   if AudioPlayback.Position < GetTimeFromBeat(CurrentSong.Medley.StartBeat) then
   begin
@@ -1112,7 +1143,6 @@ end;
 
 procedure TScreenSingView.MedleyTitleFadeOut();
 var
-  I: integer;
   Alpha: real;
   CTime: cardinal;
 begin
@@ -1265,20 +1295,20 @@ begin
   //calculate total singing beats of song
   if ScreenSong.Mode = smMedley then
   begin
-    SongStart := ScreenSing.MedleyStart * CurrentSong.BPM[0].BPM / 60;
-    SongEnd := ScreenSing.MedleyEnd * CurrentSong.BPM[0].BPM / 60;
+    SongStart := ScreenSing.MedleyStart * CurrentSong.BPM / 60;
+    SongEnd := ScreenSing.MedleyEnd * CurrentSong.BPM / 60;
   end
   else
   begin
-    SongStart := CurrentSong.BPM[0].BPM*CurrentSong.Start/60;
-    SongEnd := CurrentSong.BPM[0].BPM*TotalTime/60;
+    SongStart := CurrentSong.BPM*CurrentSong.Start/60;
+    SongEnd := CurrentSong.BPM*TotalTime/60;
   end;
   SongDuration := SongEnd - SongStart;
-  gapInBeats := CurrentSong.BPM[0].BPM*CurrentSong.GAP/1000/60;
+  gapInBeats := CurrentSong.BPM*CurrentSong.GAP/1000/60;
   // draw sentence boxes
-  for CurrentTrack := 0 to High(Tracks) do //for P1 of duet or solo lyrics, P2 of duet,..
+  for CurrentTrack := 0 to High(CurrentSong.Tracks) do //for P1 of duet or solo lyrics, P2 of duet,..
   begin
-    numLines := Length(Tracks[CurrentTrack].Lines); //Lyric lines
+    numLines := Length(CurrentSong.Tracks[CurrentTrack].Lines); //Lyric lines
     //set color to player.color
     if (CurrentTrack = 0) then
       glColor4f(GetLyricColor(Ini.SingColor[0]).R, GetLyricColor(Ini.SingColor[0]).G, GetLyricColor(Ini.SingColor[0]).B, 0.6)
@@ -1288,12 +1318,12 @@ begin
     glbegin(gl_quads);
     for LineIndex := 0 to numLines - 1 do
     begin
-      if (Tracks[CurrentTrack].Lines[LineIndex].Notes = nil) then Continue;
-      if (ScreenSong.Mode = smMedley) and (Tracks[CurrentTrack].Lines[LineIndex].Notes[0].StartBeat < CurrentSong.Medley.StartBeat) then Continue;
-      pos := (gapInBeats + Tracks[CurrentTrack].Lines[LineIndex].Notes[0].StartBeat - SongStart) / SongDuration*w;
-      br := (Tracks[CurrentTrack].Lines[LineIndex].Notes[Tracks[CurrentTrack].Lines[LineIndex].HighNote].StartBeat +
-                Tracks[CurrentTrack].Lines[LineIndex].Notes[Tracks[CurrentTrack].Lines[LineIndex].HighNote].Duration -
-                Tracks[CurrentTrack].Lines[LineIndex].Notes[0].StartBeat) / SongDuration*w; //br = last note of sentence position + its duration - first note of sentence position
+      if (CurrentSong.Tracks[CurrentTrack].Lines[LineIndex].Notes = nil) then Continue;
+      if (ScreenSong.Mode = smMedley) and (CurrentSong.Tracks[CurrentTrack].Lines[LineIndex].Notes[0].StartBeat < CurrentSong.Medley.StartBeat) then Continue;
+      pos := (gapInBeats + CurrentSong.Tracks[CurrentTrack].Lines[LineIndex].Notes[0].StartBeat - SongStart) / SongDuration*w;
+      br := (CurrentSong.Tracks[CurrentTrack].Lines[LineIndex].Notes[CurrentSong.Tracks[CurrentTrack].Lines[LineIndex].HighNote].StartBeat +
+                CurrentSong.Tracks[CurrentTrack].Lines[LineIndex].Notes[CurrentSong.Tracks[CurrentTrack].Lines[LineIndex].HighNote].Duration -
+                CurrentSong.Tracks[CurrentTrack].Lines[LineIndex].Notes[0].StartBeat) / SongDuration*w;  //br = last note of sentence position + its duration - first note of sentence position
 
       //draw a square
       glVertex2f(x+pos, y); //left top

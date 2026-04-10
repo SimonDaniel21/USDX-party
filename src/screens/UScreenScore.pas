@@ -161,7 +161,6 @@ type
       StaticLevel:          array[1..UIni.IMaxPlayerCount] of integer;
       StaticLevelRound:     array[1..UIni.IMaxPlayerCount] of integer;
 
-      Animation:            real;
       Voice:                integer;
 
       TextScore_ActualValue:  array[1..UIni.IMaxPlayerCount] of integer;
@@ -206,6 +205,7 @@ type
       procedure SwapToScreen(Screen: integer);
     public
       constructor Create; override;
+      destructor Destroy; override;
       function ParseInput(PressedKey: cardinal; CharCode: UCS4Char; PressedDown: boolean): boolean; override;
       function ParseMouse(MouseButton: Integer; BtnDown: Boolean; X, Y: integer): boolean; override;
       procedure OnShow; override;
@@ -478,7 +478,6 @@ end;
 
 function TScreenScore.ParseMouse(MouseButton: Integer; BtnDown: Boolean; X, Y: integer): boolean;
 var
-  min_y, max_y, min_x, max_x: real;
   button_s: integer;
 begin
   Result := True;
@@ -492,16 +491,11 @@ begin
     button_s := ButtonSend[3];
   end;
 
-  min_x := Button[button_s].X;
-  min_y := Button[button_s].Y;
-  max_x := Button[button_s].X + Button[button_s].W;
-  max_y := Button[button_s].Y + Button[button_s].H;
-
   // transfer mousecords to the 800x600 raster we use to draw
-  X := Round((X / (Screen^.w / Screens)) * RenderW);
+  X := Round((X / (ScreenW / Screens)) * RenderW);
   if (X > RenderW) then
     X := X - RenderW;
-  Y := Round((Y / Screen^.h) * RenderH);
+  Y := Round((Y / ScreenH) * RenderH);
 
   if (Button[button_s].Visible) and (InRegion(X, Y, Button[button_s].GetMouseOverArea)) then
     SetInteraction(button_s)
@@ -700,6 +694,26 @@ procedure TScreenScore.SwapToScreen(Screen: integer);
 var
   P, I, J, Max: integer;
   Col: TRGB;
+
+  function FindPlayerIndexForThemeSlot(const ThemeSlot, TargetScreen: integer): integer;
+  var
+    PlayerIdx: integer;
+  begin
+    Result := -1;
+
+    if Length(PlayerPositionMap) = 0 then
+      Exit;
+
+    for PlayerIdx := Low(PlayerPositionMap) to High(PlayerPositionMap) do
+    begin
+      if (PlayerPositionMap[PlayerIdx].Position = ThemeSlot) and
+         ((TargetScreen = PlayerPositionMap[PlayerIdx].Screen) or PlayerPositionMap[PlayerIdx].BothScreens) then
+      begin
+        Result := PlayerIdx;
+        Exit;
+      end;
+    end;
+  end;
 begin
 
   case PlayersPlay of
@@ -724,10 +738,15 @@ begin
     for I:= 0 to Max - 1 do
     begin
 
-      if (Screen = 2) then
+      J := FindPlayerIndexForThemeSlot(I + 1 + Max, Screen);
+      if (J <> -1) and (J <= High(Ini.PlayerColor)) then
+        Col := GetPlayerColor(Ini.PlayerColor[J])
+      else if (Screen = 2) and (I + Max <= High(Ini.PlayerColor)) then
         Col := GetPlayerColor(Ini.PlayerColor[I + Max])
+      else if (I <= High(Ini.PlayerColor)) then
+        Col := GetPlayerColor(Ini.PlayerColor[I])
       else
-        Col := GetPlayerColor(Ini.PlayerColor[I]);
+        Continue;
 
       if (copy(Theme.Score.TextName[I + 1 + Max].Color, 1, 2) = 'P' + IntToStr(I + 1)) then
       begin
@@ -813,6 +832,17 @@ begin
       for I := 0 to High(PlayerStatic[P]) do
       begin
         Statics[PlayerStatic[P, I]].Texture := PlayerStaticTextures[P, I, Screen].Tex;
+        if (Theme.Score.PlayerStatic[P, I].Typ <> Texture_Type_Colorized) then
+        begin
+          J := FindPlayerIndexForThemeSlot(P, Screen);
+          if (J <> -1) and (J <= High(Ini.PlayerColor)) then
+          begin
+            Col := GetPlayerColor(Ini.PlayerColor[J]);
+            Statics[PlayerStatic[P, I]].Texture.ColR := Col.R;
+            Statics[PlayerStatic[P, I]].Texture.ColG := Col.G;
+            Statics[PlayerStatic[P, I]].Texture.ColB := Col.B;
+          end;
+        end;
       end;
 
     { box statics }
@@ -830,7 +860,6 @@ var
   Player:  integer;
   Counter: integer;
   I: integer;
-  Col: TRGB;
   R, G, B: real;
   Col2: integer;
   ArrayStartModifier: integer;
@@ -975,6 +1004,22 @@ begin
 
 end;
 
+destructor TScreenScore.Destroy;
+var
+  I: integer;
+begin
+  for I := 1 to UIni.IMaxPlayerCount do
+  begin
+    FreeTexture(Tex_Score_NoteBarLevel_Dark[I]);
+    FreeTexture(Tex_Score_NoteBarRound_Dark[I]);
+    FreeTexture(Tex_Score_NoteBarLevel_Light[I]);
+    FreeTexture(Tex_Score_NoteBarRound_Light[I]);
+    FreeTexture(Tex_Score_NoteBarLevel_Lightest[I]);
+    FreeTexture(Tex_Score_NoteBarRound_Lightest[I]);
+  end;
+  inherited;
+end;
+
 //TODO: adapt for players 7 to 12
 procedure TScreenScore.MapPlayersToPosition;
   var
@@ -1095,7 +1140,6 @@ var
   P: integer;  // player
   I: integer;
   V: array[1..UIni.IMaxPlayerCount] of boolean; // visibility array
-  ArrayStartModifier: integer;
 begin
   if not Help.SetHelpID(ID) then
     Log.LogWarn('No Entry for Help-ID ' + ID, 'ScreenScore');
@@ -1392,8 +1436,7 @@ begin
   ThemeIndex := PlayerPositionMap[PlayerNumber-1].Position;
   if (ThemeIndex > 0) and ((ScreenAct = PlayerPositionMap[PlayerNumber-1].Screen) or (PlayerPositionMap[PlayerNumber-1].BothScreens)) then
   begin
-    // todo: take the name from player[PlayerNumber].Name instead of the ini when this is done (mog)
-    Text[TextName[ThemeIndex]].Text := Ini.Name[PlayerNumber-1];
+    Text[TextName[ThemeIndex]].Text := Player[PlayerNumber-1].Name;
     // end todo
 
     //golden
@@ -1818,15 +1861,10 @@ begin
 end;
 
 procedure TScreenScore.StartVoice;
-var
-  changed:  boolean;
-  files:    array of string;
-  I:        integer;
-
 begin
   //Music.Close;
   //ScreenSong.SongIndex := -1;
-  changed := false;
+  //changed := false;
 
   // not implement voice yet
   {

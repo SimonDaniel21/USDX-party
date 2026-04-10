@@ -69,11 +69,11 @@ procedure ResetSingTemp;
 var
   Count:  integer;
 begin
-  SetLength(Tracks, Length(Player));
+  SetLength(CurrentSong.Tracks, Length(Player));
   for Count := 0 to High(Player) do begin
-    SetLength(Tracks[Count].Lines, 1);
-    SetLength(Tracks[Count].Lines[0].Notes, 0);
-    Tracks[Count].Lines[0].Lyric := '';
+    SetLength(CurrentSong.Tracks[Count].Lines, 1);
+    SetLength(CurrentSong.Tracks[Count].Lines[0].Notes, 0);
+    CurrentSong.Tracks[Count].Lines[0].Lyric := '';
     Player[Count].Score := 0;
     Player[Count].LengthNote := 0;
     Player[Count].HighNote := -1;
@@ -89,7 +89,6 @@ var
   CurrentNote:      integer;
   CurrentTrack:     integer;
   Line:             AnsiString;
-  B:      integer;
   RelativeSubTime: integer;
   NoteState: AnsiString;
   SongFile: TTextFileStream;
@@ -161,7 +160,6 @@ begin
       if Song.Video.IsSet              then    SongFile.WriteLine('#VIDEO:'       + EncodeToken(Song.Video.ToUTF8));
 
       if Song.VideoGAP    <> 0.0       then    SongFile.WriteLine('#VIDEOGAP:'    + FloatToStr(Song.VideoGAP));
-      if Song.Resolution  <> USong.DEFAULT_RESOLUTION then    SongFile.WriteLine('#RESOLUTION:'  + IntToStr(Song.Resolution));
       if Song.NotesGAP    <> 0         then    SongFile.WriteLine('#NOTESGAP:'    + IntToStr(Song.NotesGAP));
       if Song.Start       <> 0.0       then    SongFile.WriteLine('#START:'       + FloatToStr(Song.Start));
       if Song.Finish      <> 0         then    SongFile.WriteLine('#END:'         + IntToStr(Song.Finish));
@@ -176,7 +174,7 @@ begin
         SongFile.WriteLine('#MEDLEYENDBEAT:' + IntToStr(Song.Medley.EndBeat));
       end;
 
-      SongFile.WriteLine('#BPM:' + FloatToStr(Song.BPM[0].BPM / 4));
+      SongFile.WriteLine('#BPM:' + FloatToStr(Song.BPM / 4));
       SongFile.WriteLine('#GAP:' + FloatToStr(Song.GAP));
 
       if Song.isDuet then
@@ -189,9 +187,6 @@ begin
       WriteCustomTags;
 
       RelativeSubTime := 0;
-      for B := 1 to High(Song.BPM) do
-        SongFile.WriteLine('B ' + FloatToStr(Song.BPM[B].StartBeat) + ' '
-                                + FloatToStr(Song.BPM[B].BPM/4));
 
       for CurrentTrack := 0 to High(Tracks) do
       begin

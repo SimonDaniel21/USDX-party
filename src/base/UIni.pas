@@ -99,7 +99,7 @@ type
 
   TVisualizerOption      = (voOff, voWhenNoVideo, voWhenNoVideoAndImage, voOn);
   TBackgroundMusicOption = (bmoOff, bmoOn);
-  TSongMenuMode = ( smRoulette, smChessboard, smCarousel, smSlotMachine, smSlide, smList, smMosaic);
+  TSongMenuMode = ( smRoulette, smChessboard, smList);
 
   TIni = class
     private
@@ -212,7 +212,6 @@ type
       ScreenFade:     integer;
       AskBeforeDel:   integer;
       OnSongClick:    integer;
-      LineBonus:      integer;
       PartyPopup:     integer;
       SingScores:     integer;
       TopScores:      integer;
@@ -349,10 +348,10 @@ const
 
 const
   ISorting:      array[0..10] of UTF8String = ('Edition', 'Genre', 'Language', 'Folder', 'Title', 'Artist', 'Artist2', 'Year', 'Year Reversed', 'Decade', 'Playlist');
-  ISongMenuMode: array[0..6] of UTF8String = ('Roulette', 'Chessboard', 'Carousel', 'Slot Machine', 'Slide', 'List', 'Mosaic');
+  ISongMenuMode: array[0..2] of UTF8String = ('Roulette', 'Chessboard', 'List');
 
 type
-  TSortingType = (sEdition, sGenre, sLanguage, sFolder, sTitle, sArtist, sArtist2, sYear, sYearReversed, sDecade, sPlaylist);
+  TSortingType = (sEdition, sGenre, sLanguage, sFolder, sTitle, sArtist, sArtist2, sYear, sYearReversed, sDecade);
 
 const
   IShowScores:       array[0..2] of UTF8String  = ('Off', 'When exists', 'On');
@@ -452,7 +451,6 @@ const
   sOpenMenu = 2;
   IDefaultSingMode: array[0..1] of UTF8String = ('Regular', 'Instrumental');
 
-  ILineBonus:     array[0..1] of UTF8String = ('Off', 'On');
   IPartyPopup:    array[0..1] of UTF8String = ('Off', 'On');
 
   IJoypad:        array[0..1] of UTF8String = ('Off', 'On');
@@ -482,7 +480,7 @@ var
   IDifficultyTranslated:       array[0..2] of UTF8String  = ('Easy', 'Medium', 'Hard');
   ITabsTranslated:             array[0..1] of UTF8String  = ('Off', 'On');
 
-  ISongMenuTranslated:         array[0..6] of UTF8String  = ('Roulette', 'Chessboard', 'Carousel', 'Slot Machine', 'Slide', 'List', 'Mosaic');
+  ISongMenuTranslated:         array[0..2] of UTF8String  = ('Roulette', 'Chessboard', 'List');
 
   //ISortingTranslated:          array[0..9] of UTF8String  = ('Edition', 'Genre', 'Language', 'Folder', 'Title', 'Artist', 'Artist2', 'Year', 'Decade', 'Playlist');
   ISortingTranslated:          array[0..9] of UTF8String  = ('Edition', 'Genre', 'Language', 'Folder', 'Title', 'Artist', 'Artist2', 'Year', 'Year Reversed', 'Decade');
@@ -549,7 +547,6 @@ var
   IScreenFadeTranslated:       array[0..1] of UTF8String = ('Off', 'On');
   IAskbeforeDelTranslated:     array[0..1] of UTF8String = ('Off', 'On');
   IOnSongClickTranslated:      array[0..2] of UTF8String = ('Sing', 'Select Players', 'Open Menu');
-  ILineBonusTranslated:        array[0..1] of UTF8String = ('Off', 'On');
   IPartyPopupTranslated:       array[0..1] of UTF8String = ('Off', 'On');
   ISingScoresTranslated:       array[0..1] of UTF8String = ('Off', 'On');
   ITopScoresTranslated:        array[0..1] of UTF8String = ('All', 'Player');
@@ -632,11 +629,7 @@ begin
 
   ISongMenuTranslated[0]              := ULanguage.Language.Translate('OPTION_VALUE_ROULETTE');
   ISongMenuTranslated[1]              := ULanguage.Language.Translate('OPTION_VALUE_CHESSBOARD');
-  ISongMenuTranslated[2]              := ULanguage.Language.Translate('OPTION_VALUE_CAROUSEL');
-  ISongMenuTranslated[3]              := ULanguage.Language.Translate('OPTION_VALUE_SLOTMACHINE');
-  ISongMenuTranslated[4]              := ULanguage.Language.Translate('OPTION_VALUE_SLIDE');
-  ISongMenuTranslated[5]              := ULanguage.Language.Translate('OPTION_VALUE_LIST');
-  ISongMenuTranslated[6]              := ULanguage.Language.Translate('OPTION_VALUE_MOSAIC');
+  ISongMenuTranslated[2]              := ULanguage.Language.Translate('OPTION_VALUE_LIST');
 
   ISortingTranslated[0]               := ULanguage.Language.Translate('OPTION_VALUE_EDITION');
   ISortingTranslated[1]               := ULanguage.Language.Translate('OPTION_VALUE_GENRE');
@@ -836,9 +829,6 @@ begin
 
   IDefaultSingModeTranslated[0]       := ULanguage.Language.Translate('OPTION_VALUE_REGULAR');
   IDefaultSingModeTranslated[1]       := ULanguage.Language.Translate('OPTION_VALUE_INSTRUMENTAL');
-
-  ILineBonusTranslated[0]             := ULanguage.Language.Translate('OPTION_VALUE_OFF');
-  ILineBonusTranslated[1]             := ULanguage.Language.Translate('OPTION_VALUE_ON');
 
   IPartyPopupTranslated[0]            := ULanguage.Language.Translate('OPTION_VALUE_OFF');
   IPartyPopupTranslated[1]            := ULanguage.Language.Translate('OPTION_VALUE_ON');
@@ -1085,6 +1075,7 @@ var
   DeviceIndex:  integer;
   ChannelCount: integer;
   ChannelIndex: integer;
+  PlayerNumber: integer;
   RecordKeys:   TStringList;
   i:            integer;
 begin
@@ -1127,8 +1118,11 @@ begin
       // or set non-configured channels to no player (=0).
       for ChannelIndex := 0 to High(DeviceCfg.ChannelToPlayerMap) do
       begin
-        DeviceCfg.ChannelToPlayerMap[ChannelIndex] :=
+        PlayerNumber :=
           IniFile.ReadInteger('Record', Format('Channel%d[%d]', [ChannelIndex+1, DeviceIndex]), CHANNEL_OFF);
+        if (PlayerNumber < 1) or (PlayerNumber > IMaxPlayerCount) then
+          PlayerNumber := CHANNEL_OFF;
+        DeviceCfg.ChannelToPlayerMap[ChannelIndex] := PlayerNumber;
       end;
     end;
   end;
@@ -1161,7 +1155,7 @@ begin
     for ChannelIndex := 0 to High(InputDeviceConfig[DeviceIndex].ChannelToPlayerMap) do
     begin
       PlayerNumber := InputDeviceConfig[DeviceIndex].ChannelToPlayerMap[ChannelIndex];
-      if PlayerNumber > 0 then
+      if (PlayerNumber >= 1) and (PlayerNumber <= IMaxPlayerCount) then
       begin
         IniFile.WriteInteger('Record',
             Format('Channel%d[%d]', [ChannelIndex+1, DeviceIndex+1]),
@@ -1400,6 +1394,7 @@ function TIni.InitializePianoKeyArray(const Values: array of Cardinal): TPianoKe
 var
   i: Integer;
 begin
+  Result := nil;
   SetLength(Result, Length(Values));
   for i := Low(Values) to High(Values) do
     Result[i] := Values[i];
@@ -1437,10 +1432,12 @@ begin
     Name[I] := IniFile.ReadString('Name', 'P'+IntToStr(I+1), 'Player'+IntToStr(I+1));
     // Color Player
     PlayerColor[I] := IniFile.ReadInteger('PlayerColor', 'P'+IntToStr(I+1), DefaultPlayerColors[I]);
+    // Initialize session sing colors from the saved player colors so they are usable before the first song
+    SingColor[I] := PlayerColor[I];
     // Avatar Player
     PlayerAvatar[I] := IniFile.ReadString('PlayerAvatar', 'P'+IntToStr(I+1), '');
     // Level Player
-    PlayerLevel[I] := IniFile.ReadInteger('PlayerLevel', 'P'+IntToStr(I+1), 0);
+    PlayerLevel[I] := IniFile.ReadInteger('PlayerLevel', 'P'+IntToStr(I+1), 1);
   end;
 
   // Color Team
@@ -1457,7 +1454,7 @@ begin
   Players := ReadArrayIndex(IPlayers, IniFile, 'Game', 'Players', 0);
 
   // Difficulty
-  Difficulty := ReadArrayIndex(IDifficulty, IniFile, 'Game', 'Difficulty', IGNORE_INDEX, 'Easy');
+  Difficulty := ReadArrayIndex(IDifficulty, IniFile, 'Game', 'Difficulty', IGNORE_INDEX, 'Medium');
 
   // Language
   Language := ReadArrayIndex(ILanguage, IniFile, 'Game', 'Language', IGNORE_INDEX, 'English');
@@ -1610,9 +1607,6 @@ begin
 
   // DefaultSingMode
   DefaultSingMode := ReadArrayIndex(IDefaultSingMode, IniFile, 'Advanced', 'DefaultSingMode', IGNORE_INDEX, 'Regular');
-
-  // Linebonus
-  LineBonus := ReadArrayIndex(ILineBonus, IniFile, 'Advanced', 'LineBonus', 1);
 
   // PartyPopup
   PartyPopup := ReadArrayIndex(IPartyPopup, IniFile, 'Advanced', 'PartyPopup', IGNORE_INDEX, 'On');
@@ -1774,7 +1768,6 @@ procedure TIni.Save;
 var
   IniFile: TIniFile;
   HexColor: string;
-  I: integer;
   C: TRGB;
 begin
   try
@@ -1931,9 +1924,6 @@ begin
 
     //DefaultSingMode
     IniFile.WriteString('Advanced', 'DefaultSingMode', IDefaultSingMode[DefaultSingMode]);
-
-    //Line Bonus
-    IniFile.WriteString('Advanced', 'LineBonus', ILineBonus[LineBonus]);
 
     //Party Popup
     IniFile.WriteString('Advanced', 'PartyPopup', IPartyPopup[PartyPopup]);
@@ -2212,7 +2202,6 @@ end;
 procedure TIni.SaveSoundFont(Name: string);
 var
   IniFile: TIniFile;
-  I: integer;
 begin
   if not Filename.IsReadOnly() then
   begin
@@ -2251,7 +2240,6 @@ end;
 procedure TIni.SaveNumberOfPlayers;
 var
   IniFile: TIniFile;
-  I: integer;
 begin
   if not Filename.IsReadOnly() then
   begin
@@ -2267,7 +2255,6 @@ end;
 procedure TIni.SaveSingTimebarMode;
 var
   IniFile: TIniFile;
-  I: integer;
 begin
   if not Filename.IsReadOnly() then
   begin
@@ -2283,7 +2270,6 @@ end;
 procedure TIni.SaveJukeboxTimebarMode;
 var
   IniFile: TIniFile;
-  I: integer;
 begin
   if not Filename.IsReadOnly() then
   begin

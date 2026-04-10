@@ -62,14 +62,15 @@ uses
   UTexture,
   UTextEncoding,
   UUnicodeStringHelper,
-  UUnicodeUtils;
+  UUnicodeUtils,
+  UMusic; // for TLines
 
 const
-  DEFAULT_RESOLUTION = 4; // default #RESOLUTION
-
+  DEFAULT_RESOLUTION = 4; // default beat grid resolution
+  MIN_BPM = 1.0; // minimum allowed BPM to avoid divide-by-zero
 type
 
-  TSingMode = ( smNormal, smPartyClassic, smPartyFree, smPartyChallenge, smPartyTournament, smJukebox, smPlaylistRandom , smMedley );
+  TSingMode = ( smNormal, smPartyClassic, smPartyFree, smPartyTournament, smJukebox, smPlaylistRandom , smMedley );
   TSongMode = ( smAll, smCategory, smPlaylist);
 
   TMedleySource = ( msNone, msCalculated, msTag );
@@ -80,11 +81,6 @@ type
     EndBeat:      integer;        //end beat of medley
     FadeIn_time:  real;           //FadeIn-Time in seconds
     FadeOut_time: real;           //FadeOut-Time in seconds
-  end;
-
-  TBPM = record
-    BPM:        real;
-    StartBeat:  real;
   end;
 
   TScore = record
@@ -133,6 +129,8 @@ type
     function FindSongFile(Dir: IPath; Mask: UTF8String): IPath;
     function LoadOpenedSong(SongFile: TTextFileStream; FileNamePath: IPath; DuetChange: boolean; RapToFreestyle: boolean; OutOfBoundsToFreestyle: boolean; AudioLength: real): boolean;
   public
+    Tracks: array of TLines; // Per-song track storage
+  public
     Path:         IPath; // kust path component of file (only set if file was found)
     Folder:       UTF8String; // for sorting by folder (only set if file was found)
     FileName:     IPath; // just name component of file (only set if file was found)
@@ -175,8 +173,7 @@ type
     Start:      real; // in seconds
     Finish:     integer; // in milliseconds
     Relative:   boolean;
-    Resolution: integer;
-    BPM:        array of TBPM;
+    BPM:        real;
     GAP:        real; // in milliseconds
     
     Encoding:   TEncoding;
@@ -205,7 +202,6 @@ type
     Base:       array[0..1] of integer;
     Rel:        array[0..1] of integer;
     Mult:       integer;
-    MultBPM:    integer;
 
     LastError:  AnsiString;
     function    GetErrorLineNo: integer;
@@ -248,7 +244,6 @@ uses
   UIni,
   UPathUtils,
   USongs,
-  UMusic,  //needed for Tracks
   UNote;   //needed for Player
 
 const
@@ -431,7 +426,6 @@ begin
   inherited Create();
 
   Mult    := 1;
-  MultBPM := 4;
 
   LastError := '';
 
@@ -464,8 +458,6 @@ end;
 function TSong.FindSongFile(Dir: IPath; Mask: UTF8String): IPath;
 var
   Iter: IFileIterator;
-  FileInfo: TFileInfo;
-  FileName: IPath;
 begin
   Iter := FileSystem.FileFind(Dir.Append(Mask), faDirectory);
   if (Iter.HasNext) then
@@ -633,8 +625,7 @@ var
   LinePos:      integer;
   TrackIndex:   integer;
   NoteIndex:    integer;
-  Both:         boolean;
-  CurrentTrack: integer; // P1: 0, P2: 1, (old duet format with binary player representation P1+P2: 2)
+  CurrentTrack: integer; // P1: 0, P2: 1
 
   Param0:       AnsiChar;
   Param1:       integer;
@@ -642,8 +633,30 @@ var
   Param3:       integer;
   ParamLyric:   UTF8String;
 
-  I:            integer;
   NotesFound:   boolean;
+
+  procedure RemoveEmptyLinesFromTrack(const TrackIdx: integer);
+  var
+    LinePos, WritePos: integer;
+  begin
+    WritePos := 0;
+    for LinePos := 0 to High(Tracks[TrackIdx].Lines) do
+    begin
+      if Tracks[TrackIdx].Lines[LinePos].HighNote >= 0 then
+      begin
+        if WritePos <> LinePos then
+          Tracks[TrackIdx].Lines[WritePos] := Tracks[TrackIdx].Lines[LinePos];
+        Inc(WritePos);
+      end;
+    end;
+
+    SetLength(Tracks[TrackIdx].Lines, WritePos);
+    Tracks[TrackIdx].Number := WritePos;
+    Tracks[TrackIdx].High := WritePos - 1;
+
+    if (Tracks[TrackIdx].High >= 0) and (Tracks[TrackIdx].CurrentLine > Tracks[TrackIdx].High) then
+      Tracks[TrackIdx].CurrentLine := Tracks[TrackIdx].High;
+  end;
 label
   NextTrack;
 begin
@@ -651,14 +664,9 @@ begin
   LastError := '';
   CurrentTrack := 0;
 
-  MultBPM           := 4; // multiply beat-count of note by 4
   Mult              := 1; // accuracy of measurement of note
   Rel[0]            := 0;
   Rel[1]            := 0;
-  Both              := false;
-
-  if Length(Player) = 2 then
-    Both := true;
 
   try
     MD5 := MD5SongFile(SongFile);
@@ -687,7 +695,7 @@ begin
       SetLength(Tracks, 0);
       if (CurLine[1] = 'P') then
       begin
-        CurrentSong.isDuet := true;
+        Self.isDuet := true;
         SetLength(Tracks, 2);
         CurrentTrack := -1;
       end
@@ -699,7 +707,6 @@ begin
         Tracks[TrackIndex].High := 0;
         Tracks[TrackIndex].Number := 1;
         Tracks[TrackIndex].CurrentLine := 0;
-        Tracks[TrackIndex].Resolution := self.Resolution;
         Tracks[TrackIndex].NotesGAP   := self.NotesGAP;
         Tracks[TrackIndex].ScoreValue := 0;
 
@@ -722,6 +729,16 @@ begin
 
         if (Param0 = 'P') then
         begin
+          if (not Self.isDuet) then
+          begin
+            Log.LogError(
+              'Invalid track marker in solo song: "' + CurLine + '" in file "' + FileNamePath.ToNative +
+              '" at line ' + IntToStr(FileLineNo) + '. Track markers (P1/P2) are only allowed if the first note-section line after headers is a P-line.',
+              'TSong.LoadSong'
+            );
+            Result := false;
+            Exit;
+          end;
 
           if (CurLine[2] = ' ') then
             Param1 := StrToInt(CurLine[3])
@@ -762,7 +779,7 @@ begin
           // sets the rap icon if the song has rap notes
           if(Param0 in ['R', 'G']) then
           begin
-            CurrentSong.hasRap := true;
+            Self.hasRap := true;
           end;
           // read notes
           Param1 := ParseLyricIntParam(CurLine, LinePos);
@@ -781,13 +798,13 @@ begin
             Param0 := 'F';
           end;
 
-          if (OutOfBoundsToFreestyle and (((CurrentSong.Start > 0) and (GetTimeFromBeat(Param1, Self) < CurrentSong.Start)) or ((AudioLength > 0) and (GetTimeFromBeat(Param1 + Param3, Self) >= AudioLength)))) then
+          if (OutOfBoundsToFreestyle and (((Self.Start > 0) and (GetTimeFromBeat(Param1, Self) < Self.Start)) or ((AudioLength > 0) and (GetTimeFromBeat(Param1 + Param3, Self) >= AudioLength)))) then
           begin
             // convert to freestyle note
             Param0 := 'F';
             Log.LogWarn(
               Format('Note at "%s %d %d %d %s" is before audio start (%.2f < %.2f) or after audio end (%.2f >= %.2f) -> converted to freestyle note',
-              [Param0, Param1, Param2, Param3, ParamLyric, GetTimeFromBeat(Param1, Self), CurrentSong.Start, GetTimeFromBeat(Param1 + Param3, Self), AudioLength]),
+              [Param0, Param1, Param2, Param3, ParamLyric, GetTimeFromBeat(Param1, Self), Self.Start, GetTimeFromBeat(Param1 + Param3, Self), AudioLength]),
               'TSong.LoadSong'
             );
           end;
@@ -814,12 +831,8 @@ begin
         end // if
         else if Param0 = 'B' then
         begin
-          SetLength(self.BPM, Length(self.BPM) + 1);
-          self.BPM[High(self.BPM)].StartBeat := ParseLyricFloatParam(CurLine, LinePos);
-          self.BPM[High(self.BPM)].StartBeat := self.BPM[High(self.BPM)].StartBeat + Rel[0];
-
-          self.BPM[High(self.BPM)].BPM := ParseLyricFloatParam(CurLine, LinePos);
-          self.BPM[High(self.BPM)].BPM := self.BPM[High(self.BPM)].BPM * Mult * MultBPM;
+          Log.LogWarn(Format('Ignoring variable BPM line in "%s" (line %d)',
+            [FileNamePath.ToNative, FileLineNo]), 'TSong.LoadSong');
         end;
 
         // Read next line in File
@@ -839,24 +852,20 @@ begin
 
   for TrackIndex := 0 to High(Tracks) do
   begin
-    if ((Both) or (TrackIndex = 0)) then
+    if (Length(Tracks[TrackIndex].Lines) < 1) then
     begin
-      if (Length(Tracks[TrackIndex].Lines) < 1) then
-      begin
-        LastError := 'ERROR_CORRUPT_SONG_NO_BREAKS';
-        Log.LogError('Error loading file: Can''t find any linebreaks in "' + FileNamePath.ToNative + '"');
-        exit;
-      end;
+      LastError := 'ERROR_CORRUPT_SONG_NO_BREAKS';
+      Log.LogError('Error loading file: Can''t find any linebreaks in "' + FileNamePath.ToNative + '"');
+      exit;
+    end;
 
-      if (Tracks[TrackIndex].Lines[Tracks[TrackIndex].High].HighNote < 0) then
-      begin
-        SetLength(Tracks[TrackIndex].Lines, Tracks[TrackIndex].Number - 1);
-        Tracks[TrackIndex].High := Tracks[TrackIndex].High - 1;
-        Tracks[TrackIndex].Number := Tracks[TrackIndex].Number - 1;
-        // HACK DUET ERROR
-        if not (CurrentSong.isDuet) then
-          Log.LogError('Error loading Song, sentence w/o note found in last line before E: ' + FileNamePath.ToNative);
-      end;
+    RemoveEmptyLinesFromTrack(TrackIndex);
+
+    if (Length(Tracks[TrackIndex].Lines) < 1) then
+    begin
+      LastError := 'ERROR_CORRUPT_SONG_NO_NOTES';
+      Log.LogError('Error loading file: No notes found after removing empty sentences in "' + FileNamePath.ToNative + '"');
+      exit;
     end;
   end;
 
@@ -906,8 +915,14 @@ var
   MedleyFlags: byte; //bit-vector for medley/preview tags
   EncFile: IPath; // encoded filename
   FullFileName: string;
-  I, P: integer;
+  I: integer;
   TagMap: TFPGMap<string, string>;
+
+  { this is just the native TagMap.TryGetData, but causes less compiler notes about (not) inlining }
+  function TagMapTryGetData(const Key: string; out Data: string): boolean;
+  begin
+    Result := TagMap.TryGetData(Key, Data);
+  end;
 
   { adds a custom header tag to the song
     if there is no ':' in the read line, Tag should be empty
@@ -975,11 +990,11 @@ var
     value: string;
     tempUtf8String: UTF8String;
   begin
-    if (TagMap.TryGetData(header, value)) then
+    if (TagMapTryGetData(header, value)) then
     begin
       TagMap.Remove(header);
       DecodeStringUTF8(value, field, Encoding);
-      while TagMap.TryGetData(header, value) do
+      while TagMapTryGetData(header, value) do
       begin
         TagMap.Remove(header);
         DecodeStringUTF8(value, tempUtf8String, Encoding);
@@ -993,9 +1008,7 @@ begin
   Result := true;
   Done   := 0;
   MedleyFlags := 0;
-  SetLength(self.BPM, 1);
-  self.BPM[0].BPM := 0;
-  self.BPM[0].StartBeat := 0;
+  self.BPM := 0;
 
   //SetLength(tmpEdition, 0);
 
@@ -1074,7 +1087,7 @@ begin
     //Read the songs attributes stored in the TagMap
 
     //First: Read the format version
-    if (TagMap.TryGetData('VERSION', Value)) then
+    if (TagMapTryGetData('VERSION', Value)) then
     begin
       RemoveTagsFromTagMap('VERSION');
       try
@@ -1110,7 +1123,7 @@ begin
     end
     else
     begin
-      if TagMap.TryGetData('ENCODING', Value) then
+      if TagMapTryGetData('ENCODING', Value) then
       begin
         RemoveTagsFromTagMap('ENCODING');
         self.Encoding := ParseEncoding(Value, Ini.DefaultEncoding);
@@ -1121,7 +1134,7 @@ begin
     //Required Attributes
     //-----------
 
-    if (TagMap.TryGetData('TITLE', Value)) then
+    if (TagMapTryGetData('TITLE', Value)) then
     begin
       RemoveTagsFromTagMap('TITLE');
       self.Title := DecodeStringUTF8(Value, Encoding);
@@ -1130,7 +1143,7 @@ begin
       Done := Done or 1;
     end;
 
-    if (TagMap.TryGetData('ARTIST', Value)) then
+    if (TagMapTryGetData('ARTIST', Value)) then
     begin
       RemoveTagsFromTagMap('ARTIST');
       self.Artist := DecodeStringUTF8(Value, Encoding);
@@ -1144,12 +1157,12 @@ begin
     // For older format versions the audio file is found in the MP3 header
     if self.FormatVersion.MinVersion(1,0,0) then
     begin
-      if TagMap.TryGetData('AUDIO', Value) then
+      if TagMapTryGetData('AUDIO', Value) then
       begin
         RemoveTagsFromTagMap('AUDIO');
         CheckAndSetAudioFile(Value);
         // If AUDIO is present MP3 should be ignored
-        if TagMap.TryGetData('MP3', Value) then
+        if TagMapTryGetData('MP3', Value) then
         begin
           // If MP3 has a different value than AUDIO add an info message to logs
           if not self.Audio.Equals(Value) then
@@ -1161,28 +1174,31 @@ begin
       end;
     end;
 
-    if TagMap.TryGetData('MP3', Value) then
+    if TagMapTryGetData('MP3', Value) then
     begin
       RemoveTagsFromTagMap('MP3');
       CheckAndSetAudioFile(Value);
     end;
 
     //Beats per Minute
-    if (TagMap.TryGetData('BPM', Value)) then
+    if (TagMapTryGetData('BPM', Value)) then
     begin
       RemoveTagsFromTagMap('BPM');
-      SetLength(self.BPM, 1);
-      self.BPM[0].StartBeat := 0;
+      self.BPM := 0;
       StringReplace(Value, ',', '.', [rfReplaceAll]);
-      self.BPM[0].BPM := StrToFloatI18n(Value ) * Mult * MultBPM;
+      self.BPM := StrToFloatI18n(Value) * Mult * 4;
 
-      if self.BPM[0].BPM <> 0 then
+      if self.BPM < MIN_BPM then
       begin
-        //Add BPM Flag to Done
-        Done := Done or 8
+        Log.LogError('Invalid BPM value "' + Value + '" in ' + FullFileName + '"',
+          'TSong.ReadTXTHeader');
+        self.BPM := 0;
       end
       else
-          Log.LogError('Was not able to convert String ' + FullFileName + '"' + Value + '" to number.');
+      begin
+        //Add BPM Flag to Done
+        Done := Done or 8;
+      end;
     end;
 
     //---------
@@ -1190,28 +1206,28 @@ begin
     //---------
 
     // Gap
-    if (TagMap.TryGetData('GAP', Value)) then
+    if (TagMapTryGetData('GAP', Value)) then
     begin
       RemoveTagsFromTagMap('GAP');
       self.GAP := StrToFloatI18n(Value);
     end;
 
     //Cover Picture
-    if (TagMap.TryGetData('COVER', Value)) then
+    if (TagMapTryGetData('COVER', Value)) then
     begin
       RemoveTagsFromTagMap('COVER');
       self.Cover := DecodeFilename(Value);
     end;
 
     //Background Picture
-    if (TagMap.TryGetData('BACKGROUND', Value)) then
+    if (TagMapTryGetData('BACKGROUND', Value)) then
     begin
       RemoveTagsFromTagMap('BACKGROUND');
       self.Background := DecodeFilename(Value);
     end;
 
     // Video File
-    if (TagMap.TryGetData('VIDEO', Value)) then
+    if (TagMapTryGetData('VIDEO', Value)) then
     begin
       RemoveTagsFromTagMap('VIDEO');
       EncFile := DecodeFilename(Value);
@@ -1222,7 +1238,7 @@ begin
     end;
 
     // Instrumental Audio
-    if (TagMap.TryGetData('INSTRUMENTAL', Value)) then
+    if (TagMapTryGetData('INSTRUMENTAL', Value)) then
     begin
       RemoveTagsFromTagMap('INSTRUMENTAL');
       EncFile := DecodeFilename(Value);
@@ -1231,7 +1247,7 @@ begin
     end;
 
     // Video Gap
-    if (TagMap.TryGetData('VIDEOGAP', Value)) then
+    if (TagMapTryGetData('VIDEOGAP', Value)) then
     begin
       RemoveTagsFromTagMap('VIDEOGAP');
       self.VideoGAP := StrToFloatI18n( Value )
@@ -1256,48 +1272,35 @@ begin
     end;
 
     //Year Sorting
-    if (TagMap.TryGetData('YEAR', Value)) then
+    if (TagMapTryGetData('YEAR', Value)) then
     begin
       RemoveTagsFromTagMap('YEAR');
       TryStrtoInt(Value, self.Year)
     end;
 
     // Song Start
-    if (TagMap.TryGetData('START', Value)) then
+    if (TagMapTryGetData('START', Value)) then
     begin
       RemoveTagsFromTagMap('START');
       self.Start := StrToFloatI18n( Value )
     end;
 
     // Song Ending
-    if (TagMap.TryGetData('END', Value)) then
+    if (TagMapTryGetData('END', Value)) then
     begin
       RemoveTagsFromTagMap('END');
       TryStrtoInt(Value, self.Finish)
     end;
 
-    // Resolution
-    if (TagMap.TryGetData('RESOLUTION', Value)) then
+    // Resolution (deprecated and unused)
+    if TagMap.IndexOf('RESOLUTION') > -1 then
     begin
-      if FormatVersion.MaxVersion(1,0,0,false) then
-      begin
-        RemoveTagsFromTagMap('RESOLUTION');
-        TryStrtoInt(Value, self.Resolution);
-        if (self.Resolution < 1) then
-        begin
-          Log.LogError('Ignoring invalid resolution in song: ' + FullFileName);
-          self.Resolution := DEFAULT_RESOLUTION;
-        end;
-      end
-      else
-      begin
-        Log.LogInfo('Ignoring RESOLUTION header in file "' + FullFileName + '" (deprecated in Format 1.0.0)', 'TSong.ReadTXTHeader');
-        RemoveTagsFromTagMap('RESOLUTION', false);
-      end;
+      Log.LogInfo('Ignoring RESOLUTION header in file "' + FullFileName + '" (unsupported)', 'TSong.ReadTXTHeader');
+      RemoveTagsFromTagMap('RESOLUTION', false);
     end;
 
     // Notes Gap
-    if (TagMap.TryGetData('NOTESGAP', Value)) then
+    if (TagMapTryGetData('NOTESGAP', Value)) then
     begin
       if FormatVersion.MaxVersion(1,0,0,false) then
       begin
@@ -1312,7 +1315,7 @@ begin
     end;
 
     // Relative Notes
-    if (TagMap.TryGetData('RELATIVE', Value)) then
+    if (TagMapTryGetData('RELATIVE', Value)) then
     begin
       if FormatVersion.MaxVersion(1,0,0,false) then
       begin
@@ -1329,7 +1332,7 @@ begin
     end;
 
     // PreviewStart
-    if (TagMap.TryGetData('PREVIEWSTART', Value)) then
+    if (TagMapTryGetData('PREVIEWSTART', Value)) then
     begin
       RemoveTagsFromTagMap('PREVIEWSTART');
       self.PreviewStart := StrToFloatI18n( Value );
@@ -1341,7 +1344,7 @@ begin
     end;
 
     // MedleyStartBeat
-    if TagMap.TryGetData('MEDLEYSTARTBEAT', Value) and not self.Relative then
+    if TagMapTryGetData('MEDLEYSTARTBEAT', Value) and not self.Relative then
     begin
       RemoveTagsFromTagMap('MEDLEYSTARTBEAT');
       if TryStrtoInt(Value, self.Medley.StartBeat) then
@@ -1349,7 +1352,7 @@ begin
     end;
 
     // MedleyEndBeat
-    if TagMap.TryGetData('MEDLEYENDBEAT', Value) and not self.Relative then
+    if TagMapTryGetData('MEDLEYENDBEAT', Value) and not self.Relative then
     begin
       RemoveTagsFromTagMap('MEDLEYENDBEAT');
       if TryStrtoInt(Value, self.Medley.EndBeat) then
@@ -1357,7 +1360,7 @@ begin
     end;
 
     // Medley
-    if (TagMap.TryGetData('CALCMEDLEY', Value)) then
+    if (TagMapTryGetData('CALCMEDLEY', Value)) then
     begin
       RemoveTagsFromTagMap('CALCMEDLEY');
       if Uppercase(Value) = 'OFF' then
@@ -1365,7 +1368,7 @@ begin
     end;
 
     // Duet Singer Name P1
-    if (TagMap.TryGetData('DUETSINGERP1', Value)) then
+    if (TagMapTryGetData('DUETSINGERP1', Value)) then
     begin
       if FormatVersion.MaxVersion(1,0,0,false) then
       begin
@@ -1380,7 +1383,7 @@ begin
     end;
 
     // Duet Singer Name P2
-    if (TagMap.TryGetData('DUETSINGERP2', Value)) then
+    if (TagMapTryGetData('DUETSINGERP2', Value)) then
     begin
       if FormatVersion.MaxVersion(1,0,0,false) then
       begin
@@ -1395,14 +1398,14 @@ begin
     end;
 
     // Duet Singer Name P1
-    if (TagMap.TryGetData('P1', Value)) then
+    if (TagMapTryGetData('P1', Value)) then
     begin
       RemoveTagsFromTagMap('P1');
       DecodeStringUTF8(Value, DuetNames[0], Encoding);
     end;
 
     // Duet Singer Name P2
-    if (TagMap.TryGetData('P2', Value)) then
+    if (TagMapTryGetData('P2', Value)) then
     begin
       RemoveTagsFromTagMap('P2');
       DecodeStringUTF8(Value, DuetNames[1], Encoding);
@@ -1548,7 +1551,7 @@ begin
   else
   begin //use old line if it there were no notes added since last call of NewSentence
     // HACK DUET ERROR
-    if not (CurrentSong.isDuet) then
+    if not Self.isDuet then
       Log.LogError('Error loading Song, sentence w/o note found in line ' +
                  InttoStr(FileLineNo) + ': ' + Filename.ToNative);
   end;
@@ -1682,8 +1685,8 @@ begin
     found_end := false;
 
     //set end if duration > MEDLEY_MIN_DURATION
-    if GetTimeFromBeat(self.Medley.StartBeat) + MEDLEY_MIN_DURATION >
-      GetTimeFromBeat(self.Medley.EndBeat) then
+    if GetTimeFromBeat(self.Medley.StartBeat, self) + MEDLEY_MIN_DURATION >
+      GetTimeFromBeat(self.Medley.EndBeat, self) then
     begin
       found_end := true;
     end;
@@ -1697,9 +1700,9 @@ begin
         len_notes := length(Tracks[0].Lines[I].Notes);
         for J := 0 to len_notes - 1 do
         begin
-          if GetTimeFromBeat(self.Medley.StartBeat) + MEDLEY_MIN_DURATION >
+          if GetTimeFromBeat(self.Medley.StartBeat, self) + MEDLEY_MIN_DURATION >
             GetTimeFromBeat(Tracks[0].Lines[I].Notes[J].StartBeat +
-            Tracks[0].Lines[I].Notes[J].Duration) then
+            Tracks[0].Lines[I].Notes[J].Duration, self) then
           begin
             found_end := true;
             self.Medley.EndBeat := Tracks[0].Lines[I].Notes[len_notes-1].StartBeat +
@@ -1724,7 +1727,7 @@ begin
   if self.PreviewStart = 0 then
   begin
     if self.Medley.Source = msCalculated then
-      self.PreviewStart := GetTimeFromBeat(self.Medley.StartBeat);
+      self.PreviewStart := GetTimeFromBeat(self.Medley.StartBeat, self);
   end;
 end;
 
@@ -1815,7 +1818,7 @@ begin
 
   //Required Information
   Audio    := PATH_NONE;
-  SetLength(BPM, 0);
+  BPM := 0;
 
   GAP    := 0;
   Start  := 0;
@@ -1827,7 +1830,6 @@ begin
   Video      := PATH_NONE;
   VideoGAP   := 0;
   NotesGAP   := 0;
-  Resolution := DEFAULT_RESOLUTION;
   Creator    := '';
   PreviewStart := 0;
   CalcMedley := true;
@@ -1870,7 +1872,7 @@ begin
     Result := Self.ReadTxTHeader(SongFile, ReadCustomTags);
 
     //Load Song for Medley Tags
-    CurrentSong := self;
+    CurrentSong := Self;
     Result := Result and LoadOpenedSong(SongFile, FileNamePath, DuetChange, RapToFreestyle, OutOfBoundsToFreestyle, AudioLength);
 
     if Result then
@@ -1916,4 +1918,3 @@ begin
 end;
 
 end.
-

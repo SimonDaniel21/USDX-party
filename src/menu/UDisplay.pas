@@ -776,7 +776,7 @@ begin
   GetMem(ScreenData, RowSize * ScreenH);
   glReadPixels(0, 0, ScreenW, ScreenH, GL_RGB, GL_UNSIGNED_BYTE, ScreenData);
   // on big endian machines (powerpc) this may need to be changed to
-  // Needs to be tests. KaMiSchi Sept 2008
+  // Needs to be tested. KaMiSchi Sept 2008
   // in this case one may have to add " glext, " to the list of used units
   //  glReadPixels(0, 0, ScreenW, ScreenH, GL_BGR, GL_UNSIGNED_BYTE, ScreenData);
   Surface := SDL_CreateRGBSurfaceFrom(
@@ -896,7 +896,7 @@ procedure TDisplay.DrawDebugConsole;
 var
   I, LineCount: integer;
   YOffset, ScaleF, FontSize: real;
-  PosX, PosY: real;
+  PosY: real;
   W, H: real;
   ScrollPad, ScrollW: real;
   OldStretch: real;

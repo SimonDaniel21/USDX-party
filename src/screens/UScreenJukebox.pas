@@ -134,8 +134,6 @@ type
     JukeboxTextTimeText: integer;
     //JukeboxTextSongText: integer;
 
-    SongFinish: boolean;
-
     tmpLyricsUpperY: real;
     tmpLyricsLowerY: real;
     //tmp_mouse: integer;
@@ -430,8 +428,7 @@ end;
 
 procedure TScreenJukebox.Sort(Order: integer);
 var
-  I, J, X, Tmp, Comp: integer;
-  Text: UTF8String;
+  I, J, X, Comp: integer;
   NotEnd: boolean;
 begin
 
@@ -466,11 +463,6 @@ end;
 
 // TODO: this function does nothing?
 procedure TScreenJukebox.GoToSongList(UpperLetter: UCS4Char);
-var
-  SongDesc: UTF8String;
-  I, S, CurrentInteractionSong: integer;
-  isCurrentPage, existNextSong: boolean;
-  ListCurrentPage: array of integer;
 begin
  {
 
@@ -699,8 +691,6 @@ begin
 end;
 
 procedure OnDeleteSong(Value: boolean; Data: Pointer);
-var
-  tmp: integer;
 begin
   Display.CheckOK := Value;
 
@@ -713,8 +703,6 @@ begin
 end;
 
 procedure OnEscapeJukebox(Value: boolean; Data: Pointer);
-var
-  tmp: integer;
 begin
   Display.CheckOK := Value;
   if (Value) then
@@ -1335,10 +1323,7 @@ function TScreenJukebox.ParseInput(PressedKey: Cardinal; CharCode: UCS4Char;
   PressedDown: boolean): boolean;
 var
   SDL_ModState: word;
-  I, RValueI, RValueE: integer;
   tmp: integer;
-  X, Y, Z: double;
-  UpperLetter: UCS4Char;
 begin
   Result := true;
 
@@ -2171,8 +2156,6 @@ begin
 end;
 
 procedure TScreenJukebox.Play();
-var
-  I: integer;
 begin
     AudioPlayback.Open(CurrentSong.Path.Append(CurrentSong.Audio),nil);
     AudioPlayback.SetVolume(1.0);
@@ -2248,10 +2231,6 @@ var
   DisplaySec:   integer;
   CurLyricsTime: real;
   VideoFrameTime: Extended;
-  Line: TLyricLine;
-  LastWord: TLyricWord;
-  CurrentTick: cardinal;
-  Diff: real;
 begin
   Background.Draw;
 
@@ -2457,8 +2436,8 @@ begin
     (not Lyrics.IsQueueFull) do
   begin
     // add the next line to the queue or a dummy if no more lines are available
-    if (Lyrics.LineCounter <= High(Tracks[0].Lines)) then
-      Lyrics.AddLine(@Tracks[0].Lines[Lyrics.LineCounter])
+    if (Lyrics.LineCounter <= High(CurrentSong.Tracks[0].Lines)) then
+      Lyrics.AddLine(@CurrentSong.Tracks[0].Lines[Lyrics.LineCounter])
     else
       Lyrics.AddLine(nil);
   end;
@@ -2543,7 +2522,6 @@ var
   VideoFile, BgFile: IPath;
   success: boolean;
   Max: integer;
-  CoverPath: IPath;
 begin
 
   // background texture (garbage disposal)
@@ -2692,13 +2670,13 @@ begin
   LyricsState.UpdateBeats();
 
   // main text
-  Lyrics.Clear(CurrentSong.BPM[0].BPM, CurrentSong.Resolution);
+  Lyrics.Clear(CurrentSong.BPM);
 
   // initialize lyrics by filling its queue
   while (not Lyrics.IsQueueFull) and
-        (Lyrics.LineCounter <= High(Tracks[0].Lines)) do
+        (Lyrics.LineCounter <= High(CurrentSong.Tracks[0].Lines)) do
   begin
-    Lyrics.AddLine(@Tracks[0].Lines[Lyrics.LineCounter]);
+    Lyrics.AddLine(@CurrentSong.Tracks[0].Lines[Lyrics.LineCounter]);
   end;
 
   Max := 9;
@@ -2769,7 +2747,6 @@ var
   I, J, Max: integer;
   SongDesc, Artist, Title, TimeString: UTF8String;
   CurrentTick: integer;
-  Time: real;
 begin
   CurrentTick := SDL_GetTicks() - LastTick;
 
@@ -2901,7 +2878,6 @@ end;
 
 procedure TScreenJukebox.DrawSongMenu;
 var
-  I, Max: integer;
   CurrentTick: integer;
 begin
   CurrentTick := SDL_GetTicks() - LastSongMenuTick;

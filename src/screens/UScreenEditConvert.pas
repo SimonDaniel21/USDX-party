@@ -579,9 +579,7 @@ begin
   // song info
   Song := TSong.Create();
   Song.Clear();
-  Song.Resolution := 4;
-  SetLength(Song.BPM, 1);
-  Song.BPM[0].BPM := BPM*4;
+  Song.BPM := BPM*4;
   SetLength(Notes, 0);
 
   // extract notes
@@ -674,7 +672,6 @@ begin
   Track.Number      := 1;
   Track.High        := 0;
   Track.CurrentLine := 0;
-  Track.Resolution  := 0;
   Track.NotesGAP    := 0;
   Track.ScoreValue  := 0;
 
@@ -992,7 +989,6 @@ var
   Height:   real;
   YSkip:    real;
   TrackPos: real;
-  TrackPadding:  real;
   TrackWidth: real;
   NoteDiff, TrackDiff, TrackDiffSel, TrackDiffOther: integer;
   YSelected: real;
@@ -1028,7 +1024,6 @@ begin
     YSelected := Min(Max(YSkip, Height - Length(MTracks)*YSkip), 6*YSkip);
   end;
 
-  TrackPadding := 0.15 * YSkip;
   TrackDiffSel := (HighNote-OffsetHighNote) - (LowNote+OffsetLowNote);
   TrackDiffOther := HighNote - LowNote;
   TrackWidth := InWidth - XTrack - 5 - Padding;
@@ -1155,7 +1150,6 @@ end;
 procedure TScreenEditConvert.DrawChannels(InWidth: real; Offset: real = 0.5);
 var
   Count:    integer;
-  Count2:   integer;
 
   Top:      real;
   Padding:  real;

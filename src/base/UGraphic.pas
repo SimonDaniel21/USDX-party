@@ -52,7 +52,6 @@ uses
   UScreenLoading,
   UScreenMain,
   UScreenName,
-  UScreenLevel,
   UScreenOptions,
   UScreenOptionsGame,
   UScreenOptionsGraphics,
@@ -94,8 +93,6 @@ uses
   {Stats Screens}
   UScreenStatMain,
   UScreenStatDetail,
-  {CreditsScreen}
-  UScreenCredits,
   {Popup for errors, etc.}
   UScreenPopup;
 
@@ -139,7 +136,6 @@ var
   ScreenLoading:      TScreenLoading;
   ScreenMain:         TScreenMain;
   ScreenName:         TScreenName;
-  ScreenLevel:        TScreenLevel;
   ScreenSong:         TScreenSong;
   ScreenSing:         TScreenSingController;
 
@@ -188,9 +184,6 @@ var
   //StatsScreens
   ScreenStatMain:         TScreenStatMain;
   ScreenStatDetail:       TScreenStatDetail;
-
-  //CreditsScreen
-  ScreenCredits: TScreenCredits;
 
   //popup mod
   ScreenPopupCheck: TScreenPopupCheck;
@@ -592,10 +585,8 @@ end;
 procedure InitializeScreen;
 var
   S:      string;
-  I:      integer;
   W, H:   integer;
   X, Y:   integer; // offset for re-positioning
-  Depth:  Integer;
   ActualW, ActualH: integer;
   Borderless, Fullscreen: boolean;
   Split: boolean;
@@ -816,7 +807,6 @@ end;
 
 procedure SetVideoMode(Mode: FullscreenModes);
   var
-    w,h: integer;
     Disp: TSDL_DisplayMode;
 begin
   if Mode = CurrentWindowMode then Exit;
@@ -945,8 +935,7 @@ begin
   SDL_SetWindowTitle(Screen, PChar(Title + ' - Loading ScreenMain & ScreenName'));
   ScreenMain :=             TScreenMain.Create;
   ScreenName :=             TScreenName.Create;
-  SDL_SetWindowTitle(Screen, PChar(Title + ' - Loading ScreenLevel & ScreenSong'));
-  ScreenLevel :=            TScreenLevel.Create;
+  SDL_SetWindowTitle(Screen, PChar(Title + ' - Loading ScreenSong'));
   ScreenSong :=             TScreenSong.Create;
   SDL_SetWindowTitle(Screen, PChar(Title + ' - Loading ScreenSongMenu & ScreenJukebox'));
   ScreenSongMenu :=             TScreenSongMenu.Create;
@@ -1012,9 +1001,8 @@ begin
   ScreenPartyTournamentOptions :=      TScreenPartyTournamentOptions.Create;
   ScreenPartyTournamentWin :=      TScreenPartyTournamentWin.Create;
   ScreenStatMain :=         TScreenStatMain.Create;
-  SDL_SetWindowTitle(Screen, PChar(Title + ' - Loading ScreenStatDetail & ScreenCredits'));
+  SDL_SetWindowTitle(Screen, PChar(Title + ' - Loading ScreenStatDetail'));
   ScreenStatDetail :=       TScreenStatDetail.Create;
-  ScreenCredits    :=       TScreenCredits.Create;
   SDL_SetWindowTitle(Screen, PChar(Title));
 end;
 
@@ -1026,54 +1014,53 @@ end;
 
 procedure UnloadScreens;
 begin
-  ScreenMain.Free;
-  ScreenName.Free;
-  ScreenLevel.Free;
-  ScreenSong.Free;
+  FreeAndNil(ScreenMain);
+  FreeAndNil(ScreenName);
+  FreeAndNil(ScreenSong);
   //ScreenSing.Free;
-  ScreenScore.Free;
-  ScreenOptions.Free;
-  ScreenOptionsGame.Free;
-  ScreenOptionsGraphics.Free;
-  ScreenOptionsSound.Free;
-  ScreenOptionsInput.Free;
-  ScreenOptionsLyrics.Free;
-  ScreenOptionsThemes.Free;
-  ScreenOptionsRecord.Free;
-  ScreenOptionsAdvanced.Free;
-  ScreenOptionsNetwork.Free;
-  ScreenOptionsWebcam.Free;
-  ScreenOptionsJukebox.Free;
-  ScreenEditSub.Free;
-  ScreenEdit.Free;
-  ScreenEditConvert.Free;
-  ScreenJukebox.Free;
-  ScreenJukeboxOptions.Free;
-  ScreenJukeboxPlaylist.Free;
-  ScreenTop5.Free;
-  ScreenOpen.Free;
-  ScreenAbout.Free;
+  FreeAndNil(ScreenScore);
+  FreeAndNil(ScreenOptions);
+  FreeAndNil(ScreenOptionsGame);
+  FreeAndNil(ScreenOptionsGraphics);
+  FreeAndNil(ScreenOptionsSound);
+  FreeAndNil(ScreenOptionsInput);
+  FreeAndNil(ScreenOptionsLyrics);
+  FreeAndNil(ScreenOptionsThemes);
+  FreeAndNil(ScreenOptionsRecord);
+  FreeAndNil(ScreenOptionsAdvanced);
+  FreeAndNil(ScreenOptionsNetwork);
+  FreeAndNil(ScreenOptionsWebcam);
+  FreeAndNil(ScreenOptionsJukebox);
+  FreeAndNil(ScreenEditSub);
+  FreeAndNil(ScreenEdit);
+  FreeAndNil(ScreenEditConvert);
+  FreeAndNil(ScreenJukebox);
+  FreeAndNil(ScreenJukeboxOptions);
+  FreeAndNil(ScreenJukeboxPlaylist);
+  FreeAndNil(ScreenTop5);
+  FreeAndNil(ScreenOpen);
+  FreeAndNil(ScreenAbout);
   //ScreenSingModi.Free;
-  ScreenSongMenu.Free;
-  ScreenSongJumpto.Free;
-  ScreenPopupCheck.Free;
-  ScreenPopupError.Free;
-  ScreenPopupInfo.Free;
-  ScreenPopupInsertUser.Free;
-  ScreenPopupSendScore.Free;
-  ScreenPopupScoreDownload.Free;
-  ScreenPartyNewRound.Free;
-  ScreenPartyScore.Free;
-  ScreenPartyWin.Free;
-  ScreenPartyOptions.Free;
-  ScreenPartyPlayer.Free;
-  ScreenPartyRounds.Free;
-  ScreenPartyTournamentRounds.Free;
-  ScreenPartyTournamentPlayer.Free;
-  ScreenPartyTournamentOptions.Free;
-  ScreenPartyTournamentWin.Free;
-  ScreenStatMain.Free;
-  ScreenStatDetail.Free;
+  FreeAndNil(ScreenSongMenu);
+  FreeAndNil(ScreenSongJumpto);
+  FreeAndNil(ScreenPopupCheck);
+  FreeAndNil(ScreenPopupError);
+  FreeAndNil(ScreenPopupInfo);
+  FreeAndNil(ScreenPopupInsertUser);
+  FreeAndNil(ScreenPopupSendScore);
+  FreeAndNil(ScreenPopupScoreDownload);
+  FreeAndNil(ScreenPartyNewRound);
+  FreeAndNil(ScreenPartyScore);
+  FreeAndNil(ScreenPartyWin);
+  FreeAndNil(ScreenPartyOptions);
+  FreeAndNil(ScreenPartyPlayer);
+  FreeAndNil(ScreenPartyRounds);
+  FreeAndNil(ScreenPartyTournamentRounds);
+  FreeAndNil(ScreenPartyTournamentPlayer);
+  FreeAndNil(ScreenPartyTournamentOptions);
+  FreeAndNil(ScreenPartyTournamentWin);
+  FreeAndNil(ScreenStatMain);
+  FreeAndNil(ScreenStatDetail);
 end;
 
 end.

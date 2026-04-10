@@ -73,6 +73,7 @@ const
 implementation
 
 uses
+  dglOpenGL,
   UGraphic,
   UHelp,
   UIni,
@@ -234,6 +235,7 @@ end;
 
 function TScreenSongJumpto.Draw: boolean;
 begin
+  glClear(GL_DEPTH_BUFFER_BIT);
   Result := inherited Draw;
 end;
 
@@ -259,12 +261,12 @@ begin
   fVisSongs := Count;
 
   //Fix SongSelection
-  if (TSongMenuMode(Ini.SongMenu) in [smRoulette, smCarousel, smSlide, smSlotMachine]) then
+  if (TSongMenuMode(Ini.SongMenu) = smRoulette) then
   begin
     ScreenSong.Interaction := high(CatSongs.Song);
   end;
 
-  if (TSongMenuMode(Ini.SongMenu) in [smChessboard, smList, smMosaic]) then
+  if (TSongMenuMode(Ini.SongMenu) in [smChessboard, smList]) then
   begin
     ScreenSong.Interaction := 0;
     ScreenSong.ChessboardMinLine := 0;

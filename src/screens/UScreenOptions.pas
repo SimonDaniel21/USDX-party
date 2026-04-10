@@ -240,7 +240,7 @@ begin
 
           if Interaction = ButtonNetworkIID then
           begin
-            if (High(DataBase.NetworkUser) = -1) then
+            if ((High(DataBase.NetworkUser) = -1)) then
               ScreenPopupError.ShowPopup(Language.Translate('SING_OPTIONS_NETWORK_NO_DLL'))
             else
             begin
@@ -355,7 +355,6 @@ begin
 end;
 
 procedure TScreenOptions.UpdateTextDescriptionFor(IID: integer);
-var index: integer;
 begin
   // Sanity check
   if (IID < 0 ) or (IID >= Length(MapIIDtoDescID)) then

@@ -119,6 +119,7 @@ uses
   math,
   UScreenSingController,
   UNote,
+  USong,
   UDisplay,
   UGraphic,
   UMusic,
@@ -190,15 +191,10 @@ begin
   lua_ClearStack(L);
   Result := 1;
 
-  if (CurrentSong = nil) or (Length(CurrentSong.BPM) = 0) or (Display.CurrentScreen <> @ScreenSing) then
+  if (CurrentSong = nil) or (CurrentSong.BPM < MIN_BPM) or (Display.CurrentScreen <> @ScreenSing) then
     lua_PushNumber(L, 0) // in case of error
-  else if (Length(CurrentSong.BPM) = 1) then
-    lua_PushNumber(L, CurrentSong.BPM[0].BPM)
   else
-  begin
-    // to-do: do this for songs w/ BPM changes
-    //        or drop support for BPM changes?!
-  end;
+    lua_PushNumber(L, CurrentSong.BPM);
 end;
 
 { ScreenSing.BeatsToSeconds(Beats: float)
@@ -207,15 +203,10 @@ function ULuaScreenSing_BeatsToSeconds(L: Plua_State): Integer; cdecl;
 begin
   Result := 1;
 
-  if (CurrentSong = nil) or (Length(CurrentSong.BPM) = 0) or (Display.CurrentScreen <> @ScreenSing) then
+  if (CurrentSong = nil) or (CurrentSong.BPM < MIN_BPM) or (Display.CurrentScreen <> @ScreenSing) then
     lua_PushNumber(L, 0) // in case of error
-  else if (Length(CurrentSong.BPM) = 1) then
-    lua_PushNumber(L, luaL_CheckNumber(L, 1) * 60 / CurrentSong.BPM[0].BPM)
   else
-  begin
-    // to-do: do this for songs w/ BPM changes
-    //        or drop support for BPM changes?!
-  end;
+    lua_PushNumber(L, luaL_CheckNumber(L, 1) * 60 / CurrentSong.BPM);
 end;
 
 { ScreenSing.BeatsToSeconds(Seconds: float)
@@ -224,15 +215,10 @@ function ULuaScreenSing_SecondsToBeats(L: Plua_State): Integer; cdecl;
 begin
   Result := 1;
 
-  if (CurrentSong = nil) or (Length(CurrentSong.BPM) = 0) or (Display.CurrentScreen <> @ScreenSing) then
+  if (CurrentSong = nil) or (CurrentSong.BPM < MIN_BPM) or (Display.CurrentScreen <> @ScreenSing) then
     lua_PushNumber(L, 0)
-  else if (Length(CurrentSong.BPM) = 1) then
-    lua_PushNumber(L, luaL_CheckNumber(L, 1) * CurrentSong.BPM[0].BPM / 60)
   else
-  begin
-    // to-do: do this for songs w/ BPM changes
-    //        or drop support for BPM changes?!
-  end;
+    lua_PushNumber(L, luaL_CheckNumber(L, 1) * CurrentSong.BPM / 60);
 end;
 
 { ScreenSing.GetBeat() - returns current beat of lyricstate (in quarts) }
@@ -441,7 +427,7 @@ function ULuaScreenSing_GetSongLines(L: Plua_State): Integer; cdecl;
     I, J: Integer;
 begin
   Result := 1;
-  if  (Length(Tracks) >= 1) then
+  if  (Length(CurrentSong.Tracks) >= 1) then
   begin
     lua_ClearStack(L);
 
@@ -449,10 +435,10 @@ begin
       luaL_Error(L, PChar('can''t allocate enough stack space in ULuaScreenSing_GetSongLines'));
 
     // lines array table
-    lua_CreateTable(L, Length(Tracks[0].Lines), 0);
+    lua_CreateTable(L, Length(CurrentSong.Tracks[0].Lines), 0);
 
-    for I := 0 to High(Tracks[0].Lines) do
-    with Tracks[0].Lines[I] do
+    for I := 0 to High(CurrentSong.Tracks[0].Lines) do
+    with CurrentSong.Tracks[0].Lines[I] do
     begin
       lua_pushInteger(L, I+1);
 

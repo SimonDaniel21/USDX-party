@@ -2,10 +2,8 @@
 
 001  UScreenMain
 002  UScreenAbout
-003  UScreenCredits
 
 010  UScreenName
-011  UScreenLevel
 012  UScreenSong, smNormal
 013  UScreenSong, smPartyClassic
 014  UScreenSong, smPartyFree

@@ -50,7 +50,6 @@ type
       SelectLevel:     cardinal;
       SelectPlayList:  cardinal;
       SelectPlayList2: cardinal;
-      SelectRounds:    cardinal;
 
       ILevel:     array of UTF8String;
       IPlaylist:  array of UTF8String;
@@ -74,7 +73,6 @@ type
 
       procedure InitClassic;
       procedure InitFree;
-      procedure InitChallenge;
       procedure InitTournament;
   end;
 
@@ -132,7 +130,7 @@ begin
           //  ScreenSong.CurrentPartyTime := 0;
 
           //Don't start when Playlist is Selected and there are no Playlists
-          if (Playlist = 3) and (Length(PlaylistMan.Playlists) = 0) then
+          if (Playlist = 2) and (Length(PlaylistMan.Playlists) = 0) then
             Exit;
 
           //Save Difficulty
@@ -142,8 +140,7 @@ begin
           case Mode of
             0: InitClassic;
             1: InitFree;
-            2: InitChallenge;
-            3: InitTournament;
+            2: InitTournament;
           end;
 
         end;
@@ -261,8 +258,6 @@ begin
 end;
 
 procedure TScreenPartyOptions.SetPlaylists;
-var
-  I: integer;
 begin
   if (Mode = 1) or (Mode = 2) or (Mode = 3) then
   begin
@@ -275,17 +270,17 @@ begin
     Playlist  := 0;
     Playlist2 := 0;
 
-    UpdateSelectSlideOptions(Theme.PartyOptions.SelectLevel, SelectLevel, ILevel, Level);
-    UpdateSelectSlideOptions(Theme.PartyOptions.SelectPlayList, SelectPlayList, IPlaylist, Playlist);
-    UpdateSelectSlideOptions(Theme.PartyOptions.SelectPlayList2, SelectPlayList2, IPlaylist2, Playlist2);
+    UpdateSelectSlideOptions(SelectLevel, ILevel, Level);
+    UpdateSelectSlideOptions(SelectPlayList, IPlaylist, Playlist);
+    UpdateSelectSlideOptions(SelectPlayList2, IPlaylist2, Playlist2);
   end
   else
   begin
-    UpdateSelectSlideOptions(Theme.PartyOptions.SelectLevel, SelectLevel, ILevel, Level);
+    UpdateSelectSlideOptions(SelectLevel, ILevel, Level);
 
     FillPlaylist;
 
-    UpdateSelectSlideOptions(Theme.PartyOptions.SelectPlayList, SelectPlayList, IPlaylist, Playlist);
+    UpdateSelectSlideOptions(SelectPlayList, IPlaylist, Playlist);
 
     SetPlaylist2;
   end;
@@ -341,7 +336,7 @@ begin
   end;
 
   Playlist2 := 0;
-  UpdateSelectSlideOptions(Theme.PartyOptions.SelectPlayList2, SelectPlayList2, IPlaylist2, Playlist2);
+  UpdateSelectSlideOptions(SelectPlayList2, IPlaylist2, Playlist2);
 end;
 
 procedure TScreenPartyOptions.OnShow;
@@ -373,7 +368,7 @@ begin
 
   //Save Playlist
   PlaylistMan.Mode := TSongMode(Playlist);
-  PlaylistMan.CurPlayList := High(cardinal);
+  PlaylistMan.CurPlayList := -1;
 
   //if Category Selected Search Category ID
   if Playlist = 1 then
@@ -393,15 +388,21 @@ begin
     end;
 
     //No Categorys or Invalid Entry
-    if PlaylistMan.CurPlayList = High(cardinal) then
+    if PlaylistMan.CurPlayList = -1 then
       Exit;
+  end
+  else if Playlist = 2 then
+  begin
+    // Playlist selected: ensure there is at least one playlist and the selected index is valid
+    if (Length(PlaylistMan.Playlists) = 0) or (Playlist2 < 0) or (Playlist2 > High(PlaylistMan.Playlists)) then
+      Exit
+    else
+      PlaylistMan.CurPlayList := Playlist2;
   end
   else
   begin
-    //if Playlist = 2 then
-    //  PlayListMan.SetPlayList(Playlist2)
-    //else
-      PlaylistMan.CurPlayList := Playlist2;
+    // All selected: no specific playlist
+    PlaylistMan.CurPlayList := -1;
   end;
 
   ScreenSong.Mode := smPartyClassic;
@@ -416,12 +417,6 @@ begin
   ScreenSong.Mode := smPartyFree;
   AudioPlayback.PlaySound(SoundLib.Start);
   FadeTo(@ScreenPartyPlayer);
-end;
-
-procedure TScreenPartyOptions.InitChallenge;
-begin
-  ScreenSong.Mode := smPartyChallenge;
-  ScreenPopupError.ShowPopup(Language.Translate('PARTY_MODE_NOT_AVAILABLE'));
 end;
 
 procedure TScreenPartyOptions.InitTournament;

@@ -333,6 +333,7 @@ end;
 
 function TScreenPopupCheck.Draw: boolean;
 begin
+  glClear(GL_DEPTH_BUFFER_BIT);
   Result := inherited Draw;
 end;
 
@@ -487,6 +488,7 @@ end;
 
 function TScreenPopupInsertUser.Draw: boolean;
 begin
+  glClear(GL_DEPTH_BUFFER_BIT);
   Result := inherited Draw;
 end;
 
@@ -641,7 +643,7 @@ begin
             if (New_User = true) then
               SelectValueU := High(IUsername);
 
-            UpdateSelectSlideOptions(Theme.SendScorePopup.SelectSlide3, 2, IUsername, SelectValueU);
+            UpdateSelectSlideOptions(2, IUsername, SelectValueU);
           end;
 
           if (SelectValueU = High(IUsername)) then
@@ -697,7 +699,7 @@ begin
             if (New_User = true) then
               SelectValueU := High(IUsername);
 
-            UpdateSelectSlideOptions(Theme.SendScorePopup.SelectSlide3, 2, IUsername, SelectValueU);
+            UpdateSelectSlideOptions(2, IUsername, SelectValueU);
           end;
 
           if (SelectValueU = High(IUsername)) then
@@ -784,6 +786,7 @@ end;
 
 function TScreenPopupSendScore.Draw: boolean;
 begin
+  glClear(GL_DEPTH_BUFFER_BIT);
   Result := inherited Draw;
 end;
 
@@ -825,11 +828,11 @@ begin
   SetLength(IPlayersPlay, PlayersPlay);
 
   for I := 0 to PlayersPlay - 1 do
-    IPlayersPlay[I] := Ini.Name[I];
+    IPlayersPlay[I] := Player[I].Name;
 
-  UpdateSelectSlideOptions(Theme.SendScorePopup.SelectSlide1, 0, IPlayersPlay, SelectValueP);
+  UpdateSelectSlideOptions(0, IPlayersPlay, SelectValueP);
 
-  //UpdateSelectSlideOptions(Theme.SendScorePopup.SelectSlide2, 1, IWebsite, SelectValueW);
+  UpdateSelectSlideOptions(1, IWebsite, SelectValueW);
 
   SetLength(IUsername, Length(DataBase.NetworkUser[SelectValueW].UserList));
 
@@ -839,7 +842,7 @@ begin
   SetLength(IUsername, Length(IUsername) + 1);
   IUsername[High(IUsername)] := Language.Translate('SCORE_SEND_OTHER_USER');
 
-  UpdateSelectSlideOptions(Theme.SendScorePopup.SelectSlide3, 2, IUsername, SelectValueU);
+  UpdateSelectSlideOptions(2, IUsername, SelectValueU);
 
   if (SelectValueU = High(IUsername)) then
   begin
@@ -880,8 +883,6 @@ end;
 { TScreenPopupScoreDownload }
 
 function TScreenPopupScoreDownload.ParseInput(PressedKey: cardinal; CharCode: UCS4Char; PressedDown: boolean): boolean;
-var
-  Value: boolean;
 begin
   Result := true;
   if (PressedDown) then
@@ -891,7 +892,6 @@ begin
       SDLK_ESCAPE,
       SDLK_BACKSPACE :
         begin
-          Value := false;
           Visible := false;
           Result := false;
           Text[0].Text := Language.Translate('SCORE_DOWNLOAD_RECEIVE_LIST');
@@ -900,7 +900,6 @@ begin
 
       SDLK_RETURN:
         begin
-          Value := (Interaction = 0);
           if (Interaction = 0) then
           begin
             Visible := false;
@@ -961,7 +960,7 @@ end;
 procedure TScreenPopupScoreDownload.SaveScoreSong();
 var
   String_Text, User_Score, Max_Score, Media_Score: string;
-  I, J, Update: integer;
+  J, Update: integer;
   DeleteSongLevel: array [0..2] of boolean;
 begin
 
@@ -1162,6 +1161,7 @@ function TScreenPopupScoreDownload.Draw: boolean;
 var
   I: integer;
 begin
+  glClear(GL_DEPTH_BUFFER_BIT);
   inherited Draw;
 
   Text[0].Text := Text_SongSituation;
@@ -1485,7 +1485,8 @@ end;
 
 function TScreenPopup.Draw: boolean;
 begin
-  Draw := inherited Draw;
+  glClear(GL_DEPTH_BUFFER_BIT);
+  Result := inherited Draw;
 end;
 
 procedure TScreenPopup.OnShow;
@@ -1605,6 +1606,7 @@ var
   abs:  real;
 begin
 //inherited Draw; TODO: FIX
+  glClear(GL_DEPTH_BUFFER_BIT);
   if step<1 then
     abs := 20
   else

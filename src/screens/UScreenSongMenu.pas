@@ -41,6 +41,7 @@ uses
   UMusic,
   UThemes,
   sdl2,
+  dglOpenGL,
   SysUtils;
 
 type
@@ -80,7 +81,6 @@ const
   SM_Refresh_Scores   = 64 or 6;
   SM_Song             = 64 or 8;
   SM_Medley           = 64 or 16;
-  SM_Extra            = 64 or 64;
   SM_Jukebox          = 64 or 128;
 
 var
@@ -141,13 +141,16 @@ begin
       end;
     end;
 
-    // check normal keys
-    case PressedKey of
-      SDLK_Q:
-        begin
-          Result := false;
-          Exit;
-        end;
+    // check normal keys unless a text field is actively selected
+    if not ((CurMenu = SM_Playlist_New) and Button[1].Selected) then
+    begin
+      case PressedKey of
+        SDLK_Q:
+          begin
+            Result := false;
+            Exit;
+          end;
+      end;
     end;
 
     SDL_ModState := SDL_GetModState and (KMOD_LSHIFT + KMOD_RSHIFT
@@ -299,6 +302,7 @@ end;
 
 function TScreenSongMenu.Draw: boolean;
 begin
+  glClear(GL_DEPTH_BUFFER_BIT);
   Result := inherited Draw;
 end;
 
@@ -357,7 +361,7 @@ begin
         Button[1].Visible := ((Length(PlaylistMedley.Song) > 0) or (CatSongs.Song[ScreenSong.Interaction].Medley.Source > msNone));
         Button[2].Visible := false;
         Button[3].Visible := true;
-        Button[4].Visible := true;
+        Button[4].Visible := false;
 
         SelectsS[0].Visible := false;
         SelectsS[1].Visible := false;
@@ -366,7 +370,6 @@ begin
         Button[0].Text[0].Text := Language.Translate('SONG_MENU_SONG');
         Button[1].Text[0].Text := Language.Translate('SONG_MENU_MEDLEY');
         Button[3].Text[0].Text := Language.Translate('SONG_MENU_REFRESH_SCORES');
-        Button[4].Text[0].Text := Language.Translate('SONG_MENU_EXTRA');
       end;
     SM_Song:
       begin
@@ -464,7 +467,7 @@ begin
 
         if (Length(ISelections3)>=1) then
         begin
-          UpdateSelectSlideOptions(Theme.SongMenu.SelectSlide3, 2, ISelections3, SelectValue3);
+          UpdateSelectSlideOptions(2, ISelections3, SelectValue3);
         end
         else
         begin
@@ -549,7 +552,7 @@ begin
 
         if (Length(ISelections3)>=1) then
         begin
-          UpdateSelectSlideOptions(Theme.SongMenu.SelectSlide3, 2, ISelections3, SelectValue3);
+          UpdateSelectSlideOptions(2, ISelections3, SelectValue3);
           Interaction := 3;
         end
         else
@@ -683,9 +686,9 @@ begin
               ISelections3[I] := DataBase.NetworkUser[I].Website;
           end;
 
-          UpdateSelectSlideOptions(Theme.SongMenu.SelectSlide1, 0, [Language.Translate('SONG_MENU_REFRESH_SCORES_ONLINE'), Language.Translate('SONG_MENU_REFRESH_SCORES_FILE')], SelectValue1);
-          UpdateSelectSlideOptions(Theme.SongMenu.SelectSlide2, 1, [Language.Translate('SONG_MENU_REFRESH_SCORES_ONLY_SONG'), Language.Translate('SONG_MENU_REFRESH_SCORES_ALL_SONGS')], SelectValue2);
-          UpdateSelectSlideOptions(Theme.SongMenu.SelectSlide3, 2, ISelections3, SelectValue3);
+          UpdateSelectSlideOptions(0, [Language.Translate('SONG_MENU_REFRESH_SCORES_ONLINE'), Language.Translate('SONG_MENU_REFRESH_SCORES_FILE')], SelectValue1);
+          UpdateSelectSlideOptions(1, [Language.Translate('SONG_MENU_REFRESH_SCORES_ONLY_SONG'), Language.Translate('SONG_MENU_REFRESH_SCORES_ALL_SONGS')], SelectValue2);
+          UpdateSelectSlideOptions(2, ISelections3, SelectValue3);
 
           Interaction := 3;
         end
@@ -719,10 +722,6 @@ begin
         SelectsS[2].Visible := false;
 
         Button[0].Text[0].Text := Language.Translate('SONG_MENU_PLAY');
-      end;
-    SM_Extra:
-      begin
-        ID := 'ID_020';
       end;
     SM_Jukebox:
       begin
@@ -804,12 +803,6 @@ begin
               MenuShow(SM_Refresh_Scores);
               ScreenSong.StopMusicPreview();
               ScreenSong.StopVideoPreview();
-            end;
-          7: // button 5
-            begin
-              ScreenPopupError.ShowPopup(Language.Translate('PARTY_MODE_NOT_AVAILABLE'));
-              // show extras
-              //MenuShow(SM_Extra);
             end;
           end;
       end;
@@ -915,7 +908,7 @@ begin
               Visible := False;
 
             end;
-            
+
           6: //Button 4
             begin
               ScreenSong.StartMedley(5, msCalculated);
@@ -1057,8 +1050,11 @@ begin
           6: // button 4
             begin
               // load playlist
+              PlaylistMan.ReloadPlaylist(SelectValue3);
               PlaylistMan.SetPlayList(SelectValue3);
               Visible := false;
+              ScreenSong.SelectNext(false);
+              ScreenSong.SetScrollRefresh;
             end;
         end;
       end;

@@ -166,6 +166,7 @@ type
     procedure EndSong;
 
     constructor Create; override;
+    destructor Destroy; override;
     procedure OnShow; override;
     procedure OnShowFinish; override;
     procedure OnHide; override;
@@ -226,6 +227,7 @@ var
   SDL_ModState: word;
   i1:           integer;
   Color:        TRGB;
+  NewPosition:  real;
 begin
   Result := true;
   if (PressedDown) then
@@ -558,10 +560,13 @@ begin
 
       SDLK_RIGHT:
       begin
-        if (SDL_ModState = KMOD_LCTRL) then // seek 5 seconds forward
-          AudioPlayback.SetPosition(AudioPlayback.Position + 5.0);
-        if (Assigned(fCurrentVideo)) then
-          fCurrentVideo.Position := AudioPlayback.Position + 5.0;
+        if ((SDL_ModState and KMOD_LCTRL) <> 0) then
+        begin
+          NewPosition := AudioPlayback.Position + 5.0;
+          AudioPlayback.SetPosition(NewPosition);
+          if (Assigned(fCurrentVideo)) then
+            fCurrentVideo.Position := CurrentSong.VideoGAP + NewPosition;
+        end;
       end;
 
       SDLK_LEFT:
@@ -596,12 +601,13 @@ begin
         end;
         Scores.Init;
 
-        AudioPlayback.SetPosition(AudioPlayback.Position - 5.0);
-        LyricsState.SetCurrentTime(AudioPlayback.Position - 5.0);
+        NewPosition := AudioPlayback.Position - 5.0;
+        AudioPlayback.SetPosition(NewPosition);
+        LyricsState.SetCurrentTime(NewPosition);
         ClearLyricEngines;
         LyricsState.UpdateBeats();
         if (Assigned(fCurrentVideo)) then
-          fCurrentVideo.Position := AudioPlayback.Position - 5.0;
+          fCurrentVideo.Position := CurrentSong.VideoGAP + NewPosition;
         end;
       end;
 
@@ -664,10 +670,6 @@ begin
 end;
 
 constructor TScreenSingController.Create;
-var
-  Col: array [1..6] of TRGB;
-  I: integer;
-  Color: cardinal;
 begin
   inherited Create;
   ScreenSing := self;
@@ -679,11 +681,23 @@ begin
   ClearSettings;
 end;
 
+destructor TScreenSingController.Destroy;
+begin
+  FreeAndNil(screenSingViewRef);
+  Lyrics.Free;
+  LyricsDuetP1.Free;
+  LyricsDuetP2.Free;
+  fLyricsSync.Free;
+  fMusicSync.Free;
+  eSongLoaded.Free;
+  Scores.Free;
+  inherited;
+end;
+
 procedure TScreenSingController.OnShow;
 var
   BadPlayer: integer;
   Col, ColP1, ColP2: TRGB;
-  I: integer;
 begin
   inherited;
 
@@ -846,7 +860,7 @@ end;
 
 procedure TScreenSingController.onShowFinish;
 var
-  I, PlayerIndex: integer;
+  PlayerIndex: integer;
 begin
   // hide cursor on singscreen show
   Display.SetCursor;
@@ -921,7 +935,7 @@ begin
 
   // Send Score
   Act_MD5Song := CurrentSong.MD5;
-  Act_Level := Ini.PlayerLevel[0];
+  Act_Level := Player[0].Level;
 
   // start timer
   CountSkipTimeSet;
@@ -1050,7 +1064,7 @@ begin
   end;
 
   CurrentSong := CatSongs.Song[CatSongs.Selected];
-  if (not Assigned(AudioPlayback)) or (AudioPlayback.Length = 0) then
+  if (not Assigned(AudioPlayback)) or (AudioPlayback.Length = 0) or (CurrentSong.Path.Append(CurrentSong.Audio).ToNative <> AudioPlayback.GetFileName) then
   begin
     if (not Assigned(CurrentSong.Karaoke)) or (CurrentSong.Karaoke = PATH_NONE) then
       AudioPlayback.Open(CurrentSong.Path.Append(CurrentSong.Audio), nil)
@@ -1092,8 +1106,8 @@ begin
       Text[screenSingViewRef.SongNameText].Text := CurrentSong.Artist + ' - ' + CurrentSong.Title;
 
     //medley start and end timestamps
-    StartNote := FindNote(CurrentSong.Medley.StartBeat - round(CurrentSong.BPM[0].BPM*CurrentSong.Medley.FadeIn_time/60));
-    MedleyStart := GetTimeFromBeat(Tracks[0].Lines[StartNote.line].Notes[0].StartBeat);
+    StartNote := FindNote(CurrentSong.Medley.StartBeat - round(CurrentSong.BPM*CurrentSong.Medley.FadeIn_time/60));
+    MedleyStart := GetTimeFromBeat(CurrentSong.Tracks[0].Lines[StartNote.line].Notes[0].StartBeat);
 
     //check Medley-Start
     if (MedleyStart+CurrentSong.Medley.FadeIn_time*0.5>GetTimeFromBeat(CurrentSong.Medley.StartBeat)) then
@@ -1223,25 +1237,25 @@ begin
   begin
     // initialize lyrics by filling its queue
     while (not LyricsDuetP1.IsQueueFull) and
-          (LyricsDuetP1.LineCounter <= High(Tracks[0].Lines)) do
+          (LyricsDuetP1.LineCounter <= High(CurrentSong.Tracks[0].Lines)) do
     begin
-      LyricsDuetP1.AddLine(@Tracks[0].Lines[LyricsDuetP1.LineCounter]);
+      LyricsDuetP1.AddLine(@CurrentSong.Tracks[0].Lines[LyricsDuetP1.LineCounter]);
     end;
 
     // initialize lyrics by filling its queue
     while (not LyricsDuetP2.IsQueueFull) and
-          (LyricsDuetP2.LineCounter <= High(Tracks[1].Lines)) do
+          (LyricsDuetP2.LineCounter <= High(CurrentSong.Tracks[1].Lines)) do
     begin
-      LyricsDuetP2.AddLine(@Tracks[1].Lines[LyricsDuetP2.LineCounter]);
+      LyricsDuetP2.AddLine(@CurrentSong.Tracks[1].Lines[LyricsDuetP2.LineCounter]);
     end;
   end
   else
   begin
     // initialize lyrics by filling its queue
     while (not Lyrics.IsQueueFull) and
-          (Lyrics.LineCounter <= High(Tracks[0].Lines)) do
+          (Lyrics.LineCounter <= High(CurrentSong.Tracks[0].Lines)) do
     begin
-      Lyrics.AddLine(@Tracks[0].Lines[Lyrics.LineCounter]);
+      Lyrics.AddLine(@CurrentSong.Tracks[0].Lines[Lyrics.LineCounter]);
     end;
   end;
 
@@ -1257,18 +1271,18 @@ begin
 
   if (CurrentSong.isDuet) and (PlayersPlay <> 1) then
   begin
-    for Index := Low(Tracks[1].Lines) to High(Tracks[1].Lines) do
-    if Tracks[1].Lines[Index].ScoreValue = 0 then
-      Inc(NumEmptySentences[1]);
+    for Index := Low(CurrentSong.Tracks[1].Lines) to High(CurrentSong.Tracks[1].Lines) do
+      if CurrentSong.Tracks[1].Lines[Index].ScoreValue = 0 then
+        Inc(NumEmptySentences[1]);
 
-    for Index := Low(Tracks[0].Lines) to High(Tracks[0].Lines) do
-    if Tracks[0].Lines[Index].ScoreValue = 0 then
-      Inc(NumEmptySentences[0]);
+    for Index := Low(CurrentSong.Tracks[0].Lines) to High(CurrentSong.Tracks[0].Lines) do
+      if CurrentSong.Tracks[0].Lines[Index].ScoreValue = 0 then
+        Inc(NumEmptySentences[0]);
   end
   else
   begin
-    for Index := Low(Tracks[0].Lines) to High(Tracks[0].Lines) do
-      if Tracks[0].Lines[Index].ScoreValue = 0 then
+    for Index := Low(CurrentSong.Tracks[0].Lines) to High(CurrentSong.Tracks[0].Lines) do
+      if CurrentSong.Tracks[0].Lines[Index].ScoreValue = 0 then
         Inc(NumEmptySentences[0]);
   end;
 
@@ -1284,18 +1298,18 @@ var
   i1: integer;
 
 begin
-  for i1 := 0 to PlayersPlay - 1 do
+  for i1 := 0 to High(CurrentSong.Tracks) do
   begin
-    Tracks[i1].CurrentLine := 0;
+    CurrentSong.Tracks[i1].CurrentLine := 0;
     OnSentenceChange(i1, 0);
   end;
 end;
 
 procedure TScreenSingController.ClearLyricEngines();
 begin
-    Lyrics.Clear(CurrentSong.BPM[0].BPM, CurrentSong.Resolution);
-    LyricsDuetP1.Clear(CurrentSong.BPM[0].BPM, CurrentSong.Resolution);
-    LyricsDuetP2.Clear(CurrentSong.BPM[0].BPM, CurrentSong.Resolution);
+  Lyrics.Clear(CurrentSong.BPM);
+  LyricsDuetP1.Clear(CurrentSong.BPM);
+  LyricsDuetP2.Clear(CurrentSong.BPM);
 end;
 
 procedure TScreenSingController.ClearSettings;
@@ -1339,11 +1353,7 @@ begin
   fCurrentVideo := nil;
 
   // background texture
-  if Tex_Background.TexNum > 0 then
-  begin
-    glDeleteTextures(1, PGLuint(@Tex_Background.TexNum));
-    Tex_Background.TexNum := 0;
-  end;
+  FreeTexture(Tex_Background);
   if fShowWebcam then
         begin
           Webcam.Release;
@@ -1702,30 +1712,24 @@ var
   LineBonus: real;
   MaxSongScore: integer; // max. points for the song (without line bonus)
   MaxLineScore: real;    // max. points for the current line
-  Index: integer;
 const
   // TODO: move this to a better place
   MAX_LINE_RATING = 8;        // max. rating for singing performance
 begin
-  Line := @Tracks[Track].Lines[SentenceIndex];
+  Line := @CurrentSong.Tracks[Track].Lines[SentenceIndex];
 
   // check for empty sentence
   if Line.ScoreValue <= 0 then
     Exit;
 
   // set max song score
-  if Ini.LineBonus = 0 then
-    MaxSongScore := MAX_SONG_SCORE
-  else
-    MaxSongScore := MAX_SONG_SCORE - MAX_SONG_LINE_BONUS;
+  MaxSongScore := MAX_SONG_SCORE - MAX_SONG_LINE_BONUS;
 
   // Note: ScoreValue is the sum of all note values of the song
-  MaxLineScore := MaxSongScore * (Line.ScoreValue / Tracks[Track].ScoreValue);
+  MaxLineScore := MaxSongScore * (Line.ScoreValue / CurrentSong.Tracks[Track].ScoreValue);
 
   for PlayerIndex := 0 to High(Player) do
   begin
-    //PlayerIndex := Index;
-
     if (not CurrentSong.isDuet) or (PlayerIndex mod 2 = Track) or (PlayersPlay = 1)then
     begin
       CurrentPlayer := @Player[PlayerIndex];
@@ -1751,28 +1755,22 @@ begin
       else if LinePerfection > 1 then
         LinePerfection := 1;
 
-      // add line-bonus if enabled
-      if Ini.LineBonus > 0 then
-      begin
-        // line-bonus points (same for each line, no matter how long the line is)
-        LineBonus := MAX_SONG_LINE_BONUS / (Length(Tracks[Track].Lines) -
-          NumEmptySentences[Track]);
-        // apply line-bonus
-        CurrentPlayer.ScoreLine :=
-          CurrentPlayer.ScoreLine + LineBonus * LinePerfection;
-        CurrentPlayer.ScoreLineInt := Floor(Round(CurrentPlayer.ScoreLine) / 10) * 10;
-        // update total score
-        CurrentPlayer.ScoreTotalInt :=
-          CurrentPlayer.ScoreInt +
-          CurrentPlayer.ScoreGoldenInt
-          + CurrentPlayer.ScoreLineInt;
+      // line-bonus points (same for each line, no matter how long the line is)
+      LineBonus := MAX_SONG_LINE_BONUS / (Length(CurrentSong.Tracks[Track].Lines) -
+        NumEmptySentences[Track]);
+      // apply line-bonus
+      CurrentPlayer.ScoreLine :=
+        CurrentPlayer.ScoreLine + LineBonus * LinePerfection;
+      CurrentPlayer.ScoreLineInt := Floor(Round(CurrentPlayer.ScoreLine) / 10) * 10;
+      // update total score
+      CurrentPlayer.ScoreTotalInt :=
+        CurrentPlayer.ScoreInt +
+        CurrentPlayer.ScoreGoldenInt
+        + CurrentPlayer.ScoreLineInt;
 
-        // spawn rating pop-up
-        Rating := Round(LinePerfection * MAX_LINE_RATING);
-        Scores.SpawnPopUp(PlayerIndex, Rating, CurrentPlayer.ScoreTotalInt);
-      end
-      else
-        Scores.RaiseScore(PlayerIndex, CurrentPlayer.ScoreTotalInt);
+      // spawn rating pop-up
+      Rating := Round(LinePerfection * MAX_LINE_RATING);
+      Scores.SpawnPopUp(PlayerIndex, Rating, CurrentPlayer.ScoreTotalInt);
 
       // PerfectLineTwinkle (effect), part 1
       if Ini.EffectSing = 1 then
@@ -1821,9 +1819,9 @@ begin
     (not tmp_Lyric.IsQueueFull) do
   begin
     // add the next line to the queue or a dummy if no more lines are available
-    if (tmp_Lyric.LineCounter <= High(Tracks[Track].Lines)) then
+    if (tmp_Lyric.LineCounter <= High(CurrentSong.Tracks[Track].Lines)) then
     begin
-      tmp_Lyric.AddLine(@Tracks[Track].Lines[tmp_Lyric.LineCounter]);
+      tmp_Lyric.AddLine(@CurrentSong.Tracks[Track].Lines[tmp_Lyric.LineCounter]);
     end
     else
       tmp_Lyric.AddLine(nil);
